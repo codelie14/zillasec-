@@ -2,14 +2,12 @@ import os
 import json
 import pandas as pd
 import requests
-from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
 
-# Load environment variables
-load_dotenv()
+from config import Settings, settings
 
 app = FastAPI(
     title="ZillaSec AI Backend",
@@ -20,7 +18,7 @@ app = FastAPI(
 # CORS configuration
 origins = [
     "http://localhost:3000",
-    "http://localhost:5173",  # Default Vite dev server port
+    "http://localhost:5173",
 ]
 
 app.add_middleware(
@@ -31,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic Models from the specifications
+# Pydantic Models
 class FileAnalysisMetrics(BaseModel):
     score_risque: float
     confiance_analyse: float
@@ -54,11 +52,13 @@ class AnalysisResponse(BaseModel):
     fichier_details: FileDetails
     resultat_analyse: FileAnalysisResult
 
+# Dependency to get settings
+def get_settings() -> Settings:
+    return settings
 
 # OpenRouter API call function
-def analyze_data_with_openrouter(data_json: str) -> Dict[str, Any]:
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    if not api_key or api_key == "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":
+def analyze_data_with_openrouter(data_json: str, api_key: str) -> Dict[str, Any]:
+    if not api_key or api_key == "remplacez-moi-par-votre-vraie-cle":
         raise HTTPException(status_code=500, detail="OpenRouter API key not configured.")
 
     prompt = {
@@ -86,12 +86,11 @@ def analyze_data_with_openrouter(data_json: str) -> Dict[str, Any]:
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Error calling OpenRouter API: {e}")
 
-
 @app.post("/analyze/", response_model=AnalysisResponse)
-async def analyze_file(file: UploadFile = File(...)):
-    """
-    Analyzes an uploaded file (Excel or CSV) and returns AI-driven insights.
-    """
+async def analyze_file(
+    file: UploadFile = File(...),
+    app_settings: Settings = Depends(get_settings)
+):
     file_extension = file.filename.split('.')[-1].lower()
     if file_extension not in ['xlsx', 'xls', 'csv']:
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload an Excel or CSV file.")
@@ -104,7 +103,6 @@ async def analyze_file(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error reading file: {e}")
 
-    # File details
     file_details = FileDetails(
         nom=file.filename,
         type=file_extension,
@@ -113,22 +111,29 @@ async def analyze_file(file: UploadFile = File(...)):
         lignes=len(df)
     )
 
-    # Convert dataframe to JSON for the API
     data_json = df.to_json(orient='records')
 
-    # Get analysis from OpenRouter
-    ai_response_raw = analyze_data_with_openrouter(data_json)
+    ai_response_raw = analyze_data_with_openrouter(data_json, app_settings.OPENROUTER_API_KEY)
     
-    # Extract the content from the response
     try:
-        # The actual analysis is expected in the 'content' of the first choice's message
         analysis_content = ai_response_raw['choices'][0]['message']['content']
-        # The response from the LLM is a JSON string, so we parse it
-        analysis_result_data = json.loads(analysis_content)
-        analysis_result = FileAnalysisResult(**analysis_result_data)
-    except (KeyError, IndexError, json.JSONDecodeError) as e:
-        raise HTTPException(status_code=500, detail=f"Could not parse AI response: {e}")
+        
+        # Find the start of the JSON block
+        json_start_index = analysis_content.find('{')
+        if json_start_index == -1:
+            raise ValueError("No JSON object found in the AI response.")
+            
+        # Find the end of the JSON block
+        json_end_index = analysis_content.rfind('}') + 1
+        if json_end_index == 0:
+             raise ValueError("No JSON object found in the AI response.")
 
+        json_string = analysis_content[json_start_index:json_end_index]
+        
+        analysis_result_data = json.loads(json_string)
+        analysis_result = FileAnalysisResult(**analysis_result_data)
+    except (KeyError, IndexError, json.JSONDecodeError, ValueError) as e:
+        raise HTTPException(status_code=500, detail=f"Could not parse AI response: {e} - Raw content was: {analysis_content}")
 
     return AnalysisResponse(
         fichier_details=file_details,
@@ -137,10 +142,4 @@ async def analyze_file(file: UploadFile = File(...)):
 
 @app.get("/")
 def read_root():
-    """
-    Root endpoint providing a welcome message.
-    """
     return {"message": "Welcome to ZillaSec AI Backend"}
-
-# To run the app:
-# uvicorn main:app --reload --app-dir backend/app
