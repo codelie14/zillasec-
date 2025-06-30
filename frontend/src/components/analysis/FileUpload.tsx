@@ -1,14 +1,19 @@
 import React, { useCallback, useState } from 'react';
-import { Upload, File, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, File as FileIcon, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { AnalysisResponse } from '../../types/analysis';
 
 interface UploadedFile {
   id: string;
   file: File;
-  status: 'uploading' | 'ready' | 'analyzing' | 'completed' | 'error';
-  progress: number;
+  status: 'ready' | 'analyzing' | 'completed' | 'error';
+  error?: string;
 }
 
-export const FileUpload: React.FC = () => {
+interface FileUploadProps {
+  onAnalysisComplete: (result: AnalysisResponse) => void;
+}
+
+export const FileUpload: React.FC<FileUploadProps> = ({ onAnalysisComplete }) => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
 
@@ -49,7 +54,6 @@ export const FileUpload: React.FC = () => {
       id: Math.random().toString(36).substr(2, 9),
       file,
       status: 'ready',
-      progress: 0
     }));
 
     setFiles(prev => [...prev, ...uploadedFiles]);
@@ -59,25 +63,41 @@ export const FileUpload: React.FC = () => {
     setFiles(prev => prev.filter(file => file.id !== id));
   };
 
-  const startAnalysis = (id: string) => {
-    setFiles(prev => prev.map(file => 
-      file.id === id ? { ...file, status: 'analyzing', progress: 0 } : file
+  const startAnalysis = async (id: string) => {
+    const fileToAnalyze = files.find(f => f.id === id);
+    if (!fileToAnalyze) return;
+
+    setFiles(prev => prev.map(f => 
+      f.id === id ? { ...f, status: 'analyzing' } : f
     ));
 
-    // Simulate analysis progress
-    const interval = setInterval(() => {
-      setFiles(prev => prev.map(file => {
-        if (file.id === id && file.status === 'analyzing') {
-          const newProgress = Math.min(file.progress + Math.random() * 20, 100);
-          if (newProgress >= 100) {
-            clearInterval(interval);
-            return { ...file, status: 'completed', progress: 100 };
-          }
-          return { ...file, progress: newProgress };
-        }
-        return file;
-      }));
-    }, 1000);
+    const formData = new FormData();
+    formData.append('file', fileToAnalyze.file);
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/analyze/', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Analysis failed');
+      }
+
+      const result: AnalysisResponse = await response.json();
+      
+      setFiles(prev => prev.map(f => 
+        f.id === id ? { ...f, status: 'completed' } : f
+      ));
+
+      onAnalysisComplete(result);
+
+    } catch (error: any) {
+      setFiles(prev => prev.map(f => 
+        f.id === id ? { ...f, status: 'error', error: error.message } : f
+      ));
+    }
   };
 
   const getStatusIcon = (status: UploadedFile['status']) => {
@@ -89,7 +109,7 @@ export const FileUpload: React.FC = () => {
       case 'error':
         return <AlertCircle className="h-5 w-5 text-red-500" />;
       default:
-        return <File className="h-5 w-5 text-slate-400" />;
+        return <FileIcon className="h-5 w-5 text-slate-400" />;
     }
   };
 
@@ -148,17 +168,10 @@ export const FileUpload: React.FC = () => {
                       {(uploadedFile.file.size / 1024).toFixed(1)} KB • {uploadedFile.file.type.includes('excel') ? 'Excel' : 'CSV'}
                     </p>
                     {uploadedFile.status === 'analyzing' && (
-                      <div className="mt-2">
-                        <div className="w-48 bg-slate-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${uploadedFile.progress}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-slate-500 mt-1">
-                          Analyzing... {Math.round(uploadedFile.progress)}%
-                        </p>
-                      </div>
+                       <p className="text-xs text-slate-500 mt-1">Analyzing...</p>
+                    )}
+                     {uploadedFile.status === 'error' && (
+                       <p className="text-xs text-red-500 mt-1">{uploadedFile.error}</p>
                     )}
                   </div>
                 </div>
@@ -174,9 +187,7 @@ export const FileUpload: React.FC = () => {
                   )}
                   
                   {uploadedFile.status === 'completed' && (
-                    <button className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium">
-                      View Results
-                    </button>
+                    <p className="text-sm font-medium text-emerald-600">Completed</p>
                   )}
                   
                   <button

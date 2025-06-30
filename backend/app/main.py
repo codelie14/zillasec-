@@ -58,7 +58,7 @@ class AnalysisResponse(BaseModel):
 # OpenRouter API call function
 def analyze_data_with_openrouter(data_json: str) -> Dict[str, Any]:
     api_key = os.getenv("OPENROUTER_API_KEY")
-    if not api_key or api_key == "remplacez-moi-par-votre-vraie-cle":
+    if not api_key or api_key == "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":
         raise HTTPException(status_code=500, detail="OpenRouter API key not configured.")
 
     prompt = {
