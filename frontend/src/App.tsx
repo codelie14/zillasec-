@@ -1,4 +1,4 @@
-import React from 'react';
+import { Route, Routes } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { Layout } from './components/common/Layout';
 import { Dashboard } from './components/dashboard/Dashboard';
@@ -11,49 +11,24 @@ import { Alerts } from './components/alerts/Alerts';
 import { Templates } from './components/templates/Templates';
 import { Users } from './components/users/Users';
 import { Settings } from './components/settings/Settings';
-import { useNavigation } from './hooks/useNavigation';
-
-function AppContent() {
-  const { currentPage } = useNavigation();
-
-  const renderCurrentPage = () => {
-    switch (currentPage) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'upload':
-        return <FileUpload />;
-      case 'ai-insights':
-        return <AIInsights />;
-      case 'reports':
-        return <Reports />;
-      case 'analytics':
-        return <Analytics />;
-      case 'history':
-        return <History />;
-      case 'alerts':
-        return <Alerts />;
-      case 'templates':
-        return <Templates />;
-      case 'users':
-        return <Users />;
-      case 'settings':
-        return <Settings />;
-      default:
-        return <Dashboard />;
-    }
-  };
-
-  return (
-    <Layout>
-      {renderCurrentPage()}
-    </Layout>
-  );
-}
 
 function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/upload" element={<FileUpload />} />
+          <Route path="/ai-insights" element={<AIInsights />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/alerts" element={<Alerts />} />
+          <Route path="/templates" element={<Templates />} />
+          <Route path="/users" element={<Users />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </Layout>
     </ThemeProvider>
   );
 }
