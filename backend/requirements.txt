@@ -6,3 +6,7 @@ python-dotenv
 requests
 python-multipart
 pydantic-settings
+sqlalchemy
+alembic
+reportlab
+python-pptx

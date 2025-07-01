@@ -3,11 +3,19 @@ import json
 import pandas as pd
 import requests
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
+from sqlalchemy import func
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
+from sqlalchemy.orm import Session
+from fastapi.responses import StreamingResponse
 
 from config import Settings, settings
+import models
+from database import engine, get_db
+import report_generator
+
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="ZillaSec AI Backend",
@@ -49,8 +57,12 @@ class FileDetails(BaseModel):
     lignes: int
 
 class AnalysisResponse(BaseModel):
+    id: int
     fichier_details: FileDetails
     resultat_analyse: FileAnalysisResult
+    
+    class Config:
+        orm_mode = True
 
 # Dependency to get settings
 def get_settings() -> Settings:
@@ -89,7 +101,8 @@ def analyze_data_with_openrouter(data_json: str, api_key: str) -> Dict[str, Any]
 @app.post("/analyze/", response_model=AnalysisResponse)
 async def analyze_file(
     file: UploadFile = File(...),
-    app_settings: Settings = Depends(get_settings)
+    app_settings: Settings = Depends(get_settings),
+    db: Session = Depends(get_db)
 ):
     file_extension = file.filename.split('.')[-1].lower()
     if file_extension not in ['xlsx', 'xls', 'csv']:
@@ -118,12 +131,10 @@ async def analyze_file(
     try:
         analysis_content = ai_response_raw['choices'][0]['message']['content']
         
-        # Find the start of the JSON block
         json_start_index = analysis_content.find('{')
         if json_start_index == -1:
             raise ValueError("No JSON object found in the AI response.")
             
-        # Find the end of the JSON block
         json_end_index = analysis_content.rfind('}') + 1
         if json_end_index == 0:
              raise ValueError("No JSON object found in the AI response.")
@@ -135,9 +146,129 @@ async def analyze_file(
     except (KeyError, IndexError, json.JSONDecodeError, ValueError) as e:
         raise HTTPException(status_code=500, detail=f"Could not parse AI response: {e} - Raw content was: {analysis_content}")
 
+    # Save to DB
+    db_analysis = models.Analysis(
+        file_name=file_details.nom,
+        file_type=file_details.type,
+        file_size=file_details.taille,
+        file_columns=file_details.colonnes,
+        file_rows=file_details.lignes,
+        summary=analysis_result.synthese,
+        anomalies=analysis_result.anomalies,
+        risks=analysis_result.risques,
+        recommendations=analysis_result.recommandations,
+        risk_score=analysis_result.metriques.score_risque,
+        confidence=analysis_result.metriques.confiance_analyse,
+    )
+    db.add(db_analysis)
+    db.commit()
+    db.refresh(db_analysis)
+
     return AnalysisResponse(
+        id=db_analysis.id,
         fichier_details=file_details,
         resultat_analyse=analysis_result
+    )
+
+@app.get("/analyses/", response_model=List[AnalysisResponse])
+def get_analyses(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    analyses = db.query(models.Analysis).offset(skip).limit(limit).all()
+    response = []
+    for analysis in analyses:
+        response.append(AnalysisResponse(
+            id=analysis.id,
+            fichier_details=FileDetails(
+                nom=analysis.file_name,
+                type=analysis.file_type,
+                taille=analysis.file_size,
+                colonnes=analysis.file_columns,
+                lignes=analysis.file_rows,
+            ),
+            resultat_analyse=FileAnalysisResult(
+                synthese=analysis.summary,
+                anomalies=analysis.anomalies,
+                risques=analysis.risks,
+                recommandations=analysis.recommendations,
+                metriques=FileAnalysisMetrics(
+                    score_risque=analysis.risk_score,
+                    confiance_analyse=analysis.confidence,
+                )
+            )
+        ))
+    return response
+
+@app.get("/analyses/{analysis_id}", response_model=AnalysisResponse)
+def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
+    analysis = db.query(models.Analysis).filter(models.Analysis.id == analysis_id).first()
+    if analysis is None:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    
+    return AnalysisResponse(
+        id=analysis.id,
+        fichier_details=FileDetails(
+            nom=analysis.file_name,
+            type=analysis.file_type,
+            taille=analysis.file_size,
+            colonnes=analysis.file_columns,
+            lignes=analysis.file_rows,
+        ),
+        resultat_analyse=FileAnalysisResult(
+            synthese=analysis.summary,
+            anomalies=analysis.anomalies,
+            risques=analysis.risks,
+            recommandations=analysis.recommendations,
+            metriques=FileAnalysisMetrics(
+                score_risque=analysis.risk_score,
+                confiance_analyse=analysis.confidence,
+            )
+        )
+    )
+
+class DashboardMetrics(BaseModel):
+    total_analyses: int
+    avg_risk_score: float
+    total_anomalies: int
+    total_risks: int
+
+@app.get("/dashboard/metrics/", response_model=DashboardMetrics)
+def get_dashboard_metrics(db: Session = Depends(get_db)):
+    total_analyses = db.query(models.Analysis).count()
+    avg_risk_score = db.query(func.avg(models.Analysis.risk_score)).scalar() or 0
+    total_anomalies = db.query(func.sum(func.json_array_length(models.Analysis.anomalies))).scalar() or 0
+    total_risks = db.query(func.sum(func.json_array_length(models.Analysis.risks))).scalar() or 0
+
+    return DashboardMetrics(
+        total_analyses=total_analyses,
+        avg_risk_score=avg_risk_score,
+        total_anomalies=total_anomalies,
+        total_risks=total_risks,
+    )
+
+@app.get("/reports/{analysis_id}/download")
+def download_report(analysis_id: int, format: str, db: Session = Depends(get_db)):
+    analysis = db.query(models.Analysis).filter(models.Analysis.id == analysis_id).first()
+    if analysis is None:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    if format == "pdf":
+        report_buffer = report_generator.create_pdf_report(analysis)
+        media_type = "application/pdf"
+        filename = f"report_{analysis_id}.pdf"
+    elif format == "excel":
+        report_buffer = report_generator.create_excel_report(analysis)
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        filename = f"report_{analysis_id}.xlsx"
+    elif format == "pptx":
+        report_buffer = report_generator.create_pptx_report(analysis)
+        media_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        filename = f"report_{analysis_id}.pptx"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid format specified")
+
+    return StreamingResponse(
+        iter([report_buffer.getvalue()]),
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 @app.get("/")

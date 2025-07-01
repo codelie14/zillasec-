@@ -22,6 +22,7 @@ export interface FileDetails {
 }
 
 export interface AnalysisResponse {
+    id: number;
     fichier_details: FileDetails;
     resultat_analyse: FileAnalysisResult;
 }

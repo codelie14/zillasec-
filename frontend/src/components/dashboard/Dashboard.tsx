@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MetricsCard } from './MetricsCard';
 import { RecentAnalyses } from './RecentAnalyses';
 import { RiskOverview } from './RiskOverview';
@@ -11,7 +11,45 @@ import {
   Database
 } from 'lucide-react';
 
+interface DashboardMetrics {
+    total_analyses: number;
+    avg_risk_score: number;
+    total_anomalies: number;
+    total_risks: number;
+}
+
 export const Dashboard: React.FC = () => {
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/dashboard/metrics/');
+        if (!response.ok) {
+          throw new Error('Failed to fetch dashboard metrics');
+        }
+        const data: DashboardMetrics = await response.json();
+        setMetrics(data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMetrics();
+  }, []);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return <div className="text-red-500">Error: {error}</div>;
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -23,29 +61,25 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricsCard
           title="Total Analyses"
-          value="2,847"
-          change={{ value: 12, type: 'increase' }}
+          value={metrics?.total_analyses.toLocaleString() ?? '0'}
           icon={<FileText className="h-6 w-6" />}
           color="blue"
         />
         <MetricsCard
-          title="Active Users"
-          value="156"
-          change={{ value: 8, type: 'increase' }}
+          title="Total Anomalies"
+          value={metrics?.total_anomalies.toLocaleString() ?? '0'}
           icon={<Users className="h-6 w-6" />}
           color="green"
         />
         <MetricsCard
-          title="Avg Processing Time"
-          value="18.4s"
-          change={{ value: 5, type: 'decrease' }}
+          title="Avg. Risk Score"
+          value={metrics?.avg_risk_score.toFixed(2) ?? '0.00'}
           icon={<Clock className="h-6 w-6" />}
           color="orange"
         />
         <MetricsCard
-          title="Critical Alerts"
-          value="7"
-          change={{ value: 15, type: 'increase' }}
+          title="Total Risks"
+          value={metrics?.total_risks.toLocaleString() ?? '0'}
           icon={<AlertTriangle className="h-6 w-6" />}
           color="red"
         />
@@ -60,17 +94,17 @@ export const Dashboard: React.FC = () => {
         <div className="space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-slate-600">OpenRouter API Calls</span>
-            <span className="font-medium">8,247 / 10,000</span>
+            <span className="font-medium">-- / --</span>
           </div>
           <div className="w-full bg-slate-200 rounded-full h-2">
             <div 
               className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-500"
-              style={{ width: '82.47%' }}
+              style={{ width: '0%' }}
             />
           </div>
           <div className="flex justify-between text-xs text-slate-500">
-            <span>Reset in 12 days</span>
-            <span>$247.80 / $300.00</span>
+            <span>--</span>
+            <span>--</span>
           </div>
         </div>
       </div>

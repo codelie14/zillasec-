@@ -12,6 +12,7 @@ import { Alerts } from './components/alerts/Alerts';
 import { Templates } from './components/templates/Templates';
 import { Users } from './components/users/Users';
 import { Settings } from './components/settings/Settings';
+import { ReportDetail } from './components/reports/ReportDetail';
 import { AnalysisResponse } from './types/analysis';
 
 function App() {
@@ -43,6 +44,7 @@ function App() {
           <Route path="/templates" element={<Templates />} />
           <Route path="/users" element={<Users />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/reports/:id" element={<ReportDetail />} />
         </Routes>
       </Layout>
     </ThemeProvider>
