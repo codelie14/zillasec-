@@ -9,7 +9,8 @@ import {
   FileText,
   Brain,
   TrendingUp,
-  Layout
+  Layout,
+  MessageCircle
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -41,6 +42,7 @@ export const Sidebar: React.FC = () => {
     { to: '/', icon: <BarChart3 className="h-5 w-5" />, label: 'Dashboard' },
     { to: '/upload', icon: <FileUp className="h-5 w-5" />, label: 'File Analysis' },
     { to: '/ai-insights', icon: <Brain className="h-5 w-5" />, label: 'AI Insights' },
+    { to: '/ai-chat', icon: <MessageCircle className="h-5 w-5" />, label: 'AI Chat' },
     { to: '/reports', icon: <FileText className="h-5 w-5" />, label: 'Reports' },
     { to: '/analytics', icon: <TrendingUp className="h-5 w-5" />, label: 'Analytics' },
     { to: '/history', icon: <History className="h-5 w-5" />, label: 'History' },

@@ -1,68 +1,84 @@
-import React, { useState } from 'react';
-import { Layout, Plus, Edit, Trash2, Copy, Eye, Download } from 'lucide-react';
-
-interface Template {
-  id: string;
-  name: string;
-  description: string;
-  category: 'analysis' | 'report' | 'alert' | 'custom';
-  type: 'prompt' | 'report' | 'dashboard';
-  createdAt: string;
-  lastUsed: string;
-  usageCount: number;
-  isDefault: boolean;
-}
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit, Trash2, Copy, Eye } from 'lucide-react';
+import { Template } from '../../types/template';
+import { TemplateForm } from './TemplateForm';
 
 export const Templates: React.FC = () => {
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<'all' | Template['category']>('all');
   const [selectedType, setSelectedType] = useState<'all' | Template['type']>('all');
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
 
-  const templates: Template[] = [
-    {
-      id: '1',
-      name: 'Security Analysis Prompt',
-      description: 'Standard prompt for analyzing security access patterns and anomalies',
-      category: 'analysis',
-      type: 'prompt',
-      createdAt: '2024-01-10T10:00:00Z',
-      lastUsed: '2024-01-15T14:30:00Z',
-      usageCount: 247,
-      isDefault: true
-    },
-    {
-      id: '2',
-      name: 'Monthly Security Report',
-      description: 'Comprehensive monthly security analysis report template',
-      category: 'report',
-      type: 'report',
-      createdAt: '2024-01-05T15:30:00Z',
-      lastUsed: '2024-01-15T09:15:00Z',
-      usageCount: 23,
-      isDefault: false
-    },
-    {
-      id: '3',
-      name: 'Critical Alert Template',
-      description: 'Template for high-priority security alerts and notifications',
-      category: 'alert',
-      type: 'prompt',
-      createdAt: '2024-01-08T11:20:00Z',
-      lastUsed: '2024-01-15T13:45:00Z',
-      usageCount: 89,
-      isDefault: true
-    },
-    {
-      id: '4',
-      name: 'Executive Dashboard',
-      description: 'High-level dashboard template for executive reporting',
-      category: 'report',
-      type: 'dashboard',
-      createdAt: '2024-01-12T16:45:00Z',
-      lastUsed: '2024-01-14T10:20:00Z',
-      usageCount: 12,
-      isDefault: false
+  const fetchTemplates = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:8000/templates/');
+      if (!response.ok) {
+        throw new Error('Failed to fetch templates');
+      }
+      const data = await response.json();
+      setTemplates(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    fetchTemplates();
+  }, []);
+
+  const handleDelete = async (id: number) => {
+    if (window.confirm('Are you sure you want to delete this template?')) {
+      try {
+        const response = await fetch(`http://localhost:8000/templates/${id}`, {
+          method: 'DELETE',
+        });
+        if (!response.ok) {
+          throw new Error('Failed to delete template');
+        }
+        fetchTemplates(); // Refresh the list
+      } catch (err) {
+        alert(err instanceof Error ? err.message : String(err));
+      }
+    }
+  };
+
+  const handleCreate = () => {
+    setEditingTemplate(null);
+    setIsFormOpen(true);
+  };
+
+  const handleEdit = (template: Template) => {
+    setEditingTemplate(template);
+    setIsFormOpen(true);
+  };
+
+  const handleSave = async (templateData: Omit<Template, 'id' | 'createdAt' | 'lastUsed' | 'usageCount'>) => {
+    const url = editingTemplate
+      ? `http://localhost:8000/templates/${editingTemplate.id}`
+      : 'http://localhost:8000/templates/';
+    const method = editingTemplate ? 'PUT' : 'POST';
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(templateData),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to save template`);
+      }
+      fetchTemplates();
+      setIsFormOpen(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   const getCategoryColor = (category: Template['category']) => {
     switch (category) {
@@ -101,7 +117,7 @@ export const Templates: React.FC = () => {
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Templates</h1>
           <p className="text-slate-600 dark:text-slate-300">Manage analysis prompts, reports, and dashboard templates</p>
         </div>
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium flex items-center space-x-2 transition-colors">
+        <button onClick={handleCreate} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium flex items-center space-x-2 transition-colors">
           <Plus className="h-5 w-5" />
           <span>Create Template</span>
         </button>
@@ -132,6 +148,7 @@ export const Templates: React.FC = () => {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <select
+          aria-label="Filter by category"
           value={selectedCategory}
           onChange={(e) => setSelectedCategory(e.target.value as any)}
           className="px-4 py-3 bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
@@ -144,6 +161,7 @@ export const Templates: React.FC = () => {
         </select>
 
         <select
+          aria-label="Filter by type"
           value={selectedType}
           onChange={(e) => setSelectedType(e.target.value as any)}
           className="px-4 py-3 bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
@@ -155,58 +173,75 @@ export const Templates: React.FC = () => {
         </select>
       </div>
 
-      {/* Templates Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {filteredTemplates.map((template) => (
-          <div key={template.id} className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 dark:border-slate-700 shadow-lg hover:shadow-xl transition-all duration-300">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center space-x-3">
-                <div className="text-2xl">{getTypeIcon(template.type)}</div>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <h3 className="font-semibold text-slate-900 dark:text-white">{template.name}</h3>
-                    {template.isDefault && (
-                      <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs rounded-full font-medium">
-                        DEFAULT
-                      </span>
-                    )}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Templates Grid */}
+        <div className="xl:col-span-2 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {filteredTemplates.map((template) => (
+              <div key={template.id} className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 dark:border-slate-700 shadow-lg hover:shadow-xl transition-all duration-300">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="text-2xl">{getTypeIcon(template.type)}</div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <h3 className="font-semibold text-slate-900 dark:text-white">{template.name}</h3>
+                        {template.isDefault && (
+                          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs rounded-full font-medium">
+                            DEFAULT
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-slate-600 dark:text-slate-300">{template.description}</p>
+                    </div>
                   </div>
-                  <p className="text-sm text-slate-600 dark:text-slate-300">{template.description}</p>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(template.category)}`}>
+                    {template.category.toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400 mb-4">
+                  <span>Used {template.usageCount} times</span>
+                  <span>Last used: {template.lastUsed ? new Date(template.lastUsed).toLocaleDateString() : 'Never'}</span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <button aria-label="Preview template" className="p-2 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                      <Eye className="h-4 w-4" />
+                    </button>
+                    <button aria-label="Copy template" className="p-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
+                      <Copy className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => handleEdit(template)} aria-label="Edit template" className="p-2 text-slate-600 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(template.id)}
+                      aria-label="Delete template"
+                      className="p-2 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  
+                  <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors">
+                    Use Template
+                  </button>
                 </div>
               </div>
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(template.category)}`}>
-                {template.category.toUpperCase()}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400 mb-4">
-              <span>Used {template.usageCount} times</span>
-              <span>Last used: {new Date(template.lastUsed).toLocaleDateString()}</span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <button className="p-2 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                  <Eye className="h-4 w-4" />
-                </button>
-                <button className="p-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
-                  <Copy className="h-4 w-4" />
-                </button>
-                <button className="p-2 text-slate-600 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
-                  <Edit className="h-4 w-4" />
-                </button>
-                <button className="p-2 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 transition-colors">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-              
-              <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors">
-                Use Template
-              </button>
-            </div>
+            ))}
           </div>
-        ))}
+        </div>
+
       </div>
+
+      {isFormOpen && (
+        <TemplateForm
+          template={editingTemplate}
+          onSave={handleSave}
+          onCancel={() => setIsFormOpen(false)}
+        />
+      )}
     </div>
   );
 };

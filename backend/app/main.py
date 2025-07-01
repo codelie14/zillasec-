@@ -1,5 +1,6 @@
 import os
 import json
+import datetime
 import pandas as pd
 import requests
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
@@ -38,6 +39,25 @@ app.add_middleware(
 )
 
 # Pydantic Models
+class ChatRequest(BaseModel):
+    question: str
+    context: str # 'database' or a file_id
+    file_id: int | None = None
+
+class ChatResponse(BaseModel):
+    answer: str
+
+class Conversation(BaseModel):
+    id: int
+    question: str
+    answer: str
+    context: str
+    file_id: int | None = None
+    created_at: datetime.datetime
+
+    class Config:
+        orm_mode = True
+
 class FileAnalysisMetrics(BaseModel):
     score_risque: float
     confiance_analyse: float
@@ -69,15 +89,9 @@ def get_settings() -> Settings:
     return settings
 
 # OpenRouter API call function
-def analyze_data_with_openrouter(data_json: str, api_key: str) -> Dict[str, Any]:
+def analyze_data_with_openrouter(data_json: str, api_key: str, instruction: str) -> Dict[str, Any]:
     if not api_key or api_key == "remplacez-moi-par-votre-vraie-cle":
         raise HTTPException(status_code=500, detail="OpenRouter API key not configured.")
-
-    prompt = {
-        "instruction": "Analysez ces données d'accès et identifiez: 1) Les anomalies, 2) Les risques potentiels, 3) Les suggestions d'amélioration. Structurez la réponse en JSON en suivant ce schéma : {\"synthese\": \"\", \"anomalies\": [], \"risques\": [], \"recommandations\": [], \"metriques\": {\"score_risque\": 0.0, \"confiance_analyse\": 0.0}}.",
-        "input_data": data_json,
-        "constraints": "Maximum 1500 mots. Utilisez un langage technique mais accessible."
-    }
 
     try:
         response = requests.post(
@@ -88,8 +102,8 @@ def analyze_data_with_openrouter(data_json: str, api_key: str) -> Dict[str, Any]
             json={
                 "model": "meta-llama/llama-3-70b-instruct",
                 "messages": [
-                    {"role": "system", "content": prompt["instruction"]},
-                    {"role": "user", "content": prompt["input_data"]}
+                    {"role": "system", "content": instruction},
+                    {"role": "user", "content": data_json}
                 ]
             }
         )
@@ -274,3 +288,117 @@ def download_report(analysis_id: int, format: str, db: Session = Depends(get_db)
 @app.get("/")
 def read_root():
     return {"message": "Welcome to ZillaSec AI Backend"}
+
+@app.post("/chat/", response_model=ChatResponse)
+async def chat_with_ai(
+    request: ChatRequest,
+    app_settings: Settings = Depends(get_settings),
+    db: Session = Depends(get_db)
+):
+    if request.context == 'database':
+        # This is a simplified example. A real implementation would
+        # fetch relevant data from the DB based on the question.
+        all_analyses = db.query(models.Analysis).limit(10).all()
+        context_data = json.dumps([r.__dict__ for r in all_analyses], default=str)
+        instruction = f"En vous basant sur ces données d'analyse de la base de données, répondez à la question suivante : {request.question}"
+    elif request.context == 'file' and request.file_id:
+        analysis = db.query(models.Analysis).filter(models.Analysis.id == request.file_id).first()
+        if not analysis:
+            raise HTTPException(status_code=404, detail="Analysis file not found")
+        context_data = json.dumps(analysis.__dict__, default=str)
+        instruction = f"En vous basant sur les données de ce fichier d'analyse, répondez à la question suivante : {request.question}"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid chat context or missing file_id")
+
+    ai_response_raw = analyze_data_with_openrouter(context_data, app_settings.OPENROUTER_API_KEY, instruction)
+    
+    try:
+        answer = ai_response_raw['choices'][0]['message']['content']
+    except (KeyError, IndexError):
+        raise HTTPException(status_code=500, detail="Could not parse AI response")
+
+    db_conversation = models.Conversation(
+        question=request.question,
+        answer=answer,
+        context=request.context,
+        file_id=request.file_id
+    )
+    db.add(db_conversation)
+    db.commit()
+
+    return ChatResponse(answer=answer)
+
+@app.get("/conversations/", response_model=List[Conversation])
+def get_conversations(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    conversations = db.query(models.Conversation).order_by(models.Conversation.created_at.desc()).offset(skip).limit(limit).all()
+    return conversations
+import datetime
+
+# Pydantic Models for Templates
+class TemplateBase(BaseModel):
+    name: str
+    description: str | None = None
+    category: str
+    type: str
+    content: str
+    is_default: bool = False
+
+class TemplateCreate(TemplateBase):
+    pass
+
+class TemplateUpdate(TemplateBase):
+    pass
+
+class Template(TemplateBase):
+    id: int
+    created_at: datetime.datetime
+    last_used: datetime.datetime | None = None
+    usage_count: int
+
+    class Config:
+        orm_mode = True
+
+# Template CRUD Endpoints
+
+@app.post("/templates/", response_model=Template)
+def create_template(template: TemplateCreate, db: Session = Depends(get_db)):
+    db_template = models.Template(**template.dict())
+    db.add(db_template)
+    db.commit()
+    db.refresh(db_template)
+    return db_template
+
+@app.get("/templates/", response_model=List[Template])
+def read_templates(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    templates = db.query(models.Template).offset(skip).limit(limit).all()
+    return templates
+
+@app.get("/templates/{template_id}", response_model=Template)
+def read_template(template_id: int, db: Session = Depends(get_db)):
+    db_template = db.query(models.Template).filter(models.Template.id == template_id).first()
+    if db_template is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return db_template
+
+@app.put("/templates/{template_id}", response_model=Template)
+def update_template(template_id: int, template: TemplateUpdate, db: Session = Depends(get_db)):
+    db_template = db.query(models.Template).filter(models.Template.id == template_id).first()
+    if db_template is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    for key, value in template.dict().items():
+        setattr(db_template, key, value)
+    
+    db.commit()
+    db.refresh(db_template)
+    return db_template
+
+@app.delete("/templates/{template_id}", response_model=Template)
+def delete_template(template_id: int, db: Session = Depends(get_db)):
+    db_template = db.query(models.Template).filter(models.Template.id == template_id).first()
+    if db_template is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    db.delete(db_template)
+    db.commit()
+    return db_template

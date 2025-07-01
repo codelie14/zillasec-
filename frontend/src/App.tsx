@@ -14,6 +14,7 @@ import { Users } from './components/users/Users';
 import { Settings } from './components/settings/Settings';
 import { ReportDetail } from './components/reports/ReportDetail';
 import { AnalysisResponse } from './types/analysis';
+import { AIChatPage } from './pages/AIChatPage';
 
 function App() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(null);
@@ -45,6 +46,7 @@ function App() {
           <Route path="/users" element={<Users />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/reports/:id" element={<ReportDetail />} />
+          <Route path="/ai-chat" element={<AIChatPage />} />
         </Routes>
       </Layout>
     </ThemeProvider>
