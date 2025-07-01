@@ -4,7 +4,7 @@ import datetime
 import pandas as pd
 import requests
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
-from sqlalchemy import func
+from sqlalchemy import func, inspect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
@@ -140,7 +140,8 @@ async def analyze_file(
 
     data_json = df.to_json(orient='records')
 
-    ai_response_raw = analyze_data_with_openrouter(data_json, app_settings.OPENROUTER_API_KEY)
+    instruction = "Analysez ces données d'accès et identifiez: 1) Les anomalies, 2) Les risques potentiels, 3) Les suggestions d'amélioration. Structurez la réponse en JSON en suivant ce schéma : {\"synthese\": \"\", \"anomalies\": [], \"risques\": [], \"recommandations\": [], \"metriques\": {\"score_risque\": 0.0, \"confiance_analyse\": 0.0}}."
+    ai_response_raw = analyze_data_with_openrouter(data_json, app_settings.OPENROUTER_API_KEY, instruction)
     
     try:
         analysis_content = ai_response_raw['choices'][0]['message']['content']
@@ -402,3 +403,61 @@ def delete_template(template_id: int, db: Session = Depends(get_db)):
     db.delete(db_template)
     db.commit()
     return db_template
+
+# Database Management Endpoints
+@app.get("/database/tables/", response_model=List[str])
+def get_table_names(db: Session = Depends(get_db)):
+    inspector = inspect(db.bind)
+    return inspector.get_table_names()
+
+@app.get("/database/tables/{table_name}")
+def get_table_content(table_name: str, db: Session = Depends(get_db)):
+    inspector = inspect(db.bind)
+    if not table_name in inspector.get_table_names():
+        raise HTTPException(status_code=404, detail="Table not found")
+    
+    try:
+        df = pd.read_sql_table(table_name, db.bind)
+        return df.to_dict(orient='records')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading table: {e}")
+
+@app.delete("/database/tables/{table_name}/clear")
+def clear_table(table_name: str, db: Session = Depends(get_db)):
+    inspector = inspect(db.bind)
+    if not table_name in inspector.get_table_names():
+        raise HTTPException(status_code=404, detail="Table not found")
+    
+    try:
+        table = models.Base.metadata.tables[table_name]
+        db.execute(table.delete())
+        db.commit()
+        return {"message": f"Table {table_name} cleared successfully."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error clearing table: {e}")
+
+@app.delete("/database/tables/{table_name}/rows")
+def delete_table_row(table_name: str, row: Dict[str, Any], db: Session = Depends(get_db)):
+    inspector = inspect(db.bind)
+    if not table_name in inspector.get_table_names():
+        raise HTTPException(status_code=404, detail="Table not found")
+    
+    try:
+        table = models.Base.metadata.tables[table_name]
+        
+        # Build a chain of .where() clauses
+        delete_stmt = table.delete()
+        for col, val in row.items():
+            delete_stmt = delete_stmt.where(table.c[col] == val)
+
+        result = db.execute(delete_stmt)
+        db.commit()
+
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Row not found or could not be deleted.")
+
+        return {"message": f"Row deleted successfully from {table_name}."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting row: {e}")

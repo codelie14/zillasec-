@@ -3,14 +3,15 @@ import {
   BarChart3, 
   FileUp, 
   History, 
-  Settings, 
-  Users, 
+  Settings,
+  Users,
   AlertTriangle,
-  FileText,
-  Brain,
-  TrendingUp,
-  Layout,
-  MessageCircle
+ FileText,
+ Brain,
+ TrendingUp,
+ Layout,
+ MessageCircle,
+ Database
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -49,11 +50,12 @@ export const Sidebar: React.FC = () => {
     { to: '/alerts', icon: <AlertTriangle className="h-5 w-5" />, label: 'Alerts' },
     { to: '/templates', icon: <Layout className="h-5 w-5" />, label: 'Templates' },
     { to: '/users', icon: <Users className="h-5 w-5" />, label: 'Users' },
+    { to: '/database', icon: <Database className="h-5 w-5" />, label: 'Database' },
     { to: '/settings', icon: <Settings className="h-5 w-5" />, label: 'Settings' },
   ];
 
   return (
-    <div className="fixed left-0 top-16 h-full w-64 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-r border-slate-200 dark:border-slate-700 p-4 transition-colors duration-300">
+    <div className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-r border-slate-200 dark:border-slate-700 p-4 transition-colors duration-300 overflow-y-auto">
       <nav className="space-y-2">
         {menuItems.map((item) => (
           <SidebarItem

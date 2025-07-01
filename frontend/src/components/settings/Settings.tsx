@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, Save, Key, Bell, Shield, Database, Palette, Globe } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Key, Bell, Shield, Database, Palette } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 
 export const Settings: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('general');
+  const [apiKey, setApiKey] = useState('');
+
+  const handleSave = () => {
+    // For now, just log the settings to the console
+    console.log('Saving settings:', { apiKey });
+    alert('Settings saved! (Check the console)');
+  };
 
   const tabs = [
     { id: 'general', label: 'General', icon: SettingsIcon },
@@ -53,10 +60,11 @@ export const Settings: React.FC = () => {
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">General Settings</h3>
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="orgName" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Organization Name
                     </label>
                     <input
+                      id="orgName"
                       type="text"
                       defaultValue="ZillaSec Corporation"
                       className="w-full px-4 py-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
@@ -64,10 +72,10 @@ export const Settings: React.FC = () => {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="language" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Default Language
                     </label>
-                    <select className="w-full px-4 py-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors">
+                    <select id="language" className="w-full px-4 py-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors">
                       <option value="en">English</option>
                       <option value="fr">Français</option>
                       <option value="es">Español</option>
@@ -76,10 +84,10 @@ export const Settings: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="timezone" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Timezone
                     </label>
-                    <select className="w-full px-4 py-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors">
+                    <select id="timezone" className="w-full px-4 py-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors">
                       <option value="UTC">UTC</option>
                       <option value="America/New_York">Eastern Time</option>
                       <option value="America/Los_Angeles">Pacific Time</option>
@@ -110,7 +118,7 @@ export const Settings: React.FC = () => {
                       <h4 className="font-medium text-slate-900 dark:text-white">Session Timeout</h4>
                       <p className="text-sm text-slate-600 dark:text-slate-300">Automatically log out inactive users</p>
                     </div>
-                    <select className="px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg">
+                    <select aria-label="Session Timeout" className="px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg">
                       <option value="30">30 minutes</option>
                       <option value="60">1 hour</option>
                       <option value="240">4 hours</option>
@@ -136,13 +144,16 @@ export const Settings: React.FC = () => {
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">API Configuration</h3>
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="apiKey" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       OpenRouter API Key
                     </label>
                     <div className="flex space-x-2">
                       <input
+                        id="apiKey"
                         type="password"
                         placeholder="sk-or-v1-..."
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
                         className="flex-1 px-4 py-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                       />
                       <button className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
@@ -152,10 +163,10 @@ export const Settings: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="model" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Model Selection
                     </label>
-                    <select className="w-full px-4 py-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors">
+                    <select id="model" className="w-full px-4 py-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors">
                       <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B Instruct</option>
                       <option value="anthropic/claude-3-sonnet">Claude 3 Sonnet</option>
                       <option value="openai/gpt-4-turbo">GPT-4 Turbo</option>
@@ -168,16 +179,18 @@ export const Settings: React.FC = () => {
                     </label>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Requests per minute</label>
+                        <label htmlFor="rateLimit" className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Requests per minute</label>
                         <input
+                          id="rateLimit"
                           type="number"
                           defaultValue="60"
                           className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Max tokens per request</label>
+                        <label htmlFor="maxTokens" className="block text-xs text-slate-600 dark:text-slate-400 mb-1">Max tokens per request</label>
                         <input
+                          id="maxTokens"
                           type="number"
                           defaultValue="4000"
                           className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
@@ -200,6 +213,7 @@ export const Settings: React.FC = () => {
                     </div>
                     <button
                       onClick={toggleTheme}
+                      aria-label={theme === 'dark' ? 'Activate light mode' : 'Activate dark mode'}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                         theme === 'dark' ? 'bg-blue-600' : 'bg-slate-200'
                       }`}
@@ -220,6 +234,7 @@ export const Settings: React.FC = () => {
                       {['blue', 'purple', 'emerald', 'orange', 'red'].map((color) => (
                         <button
                           key={color}
+                          aria-label={`Set primary color to ${color}`}
                           className={`w-8 h-8 rounded-full bg-${color}-600 hover:scale-110 transition-transform`}
                         />
                       ))}
@@ -227,10 +242,10 @@ export const Settings: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="sidebarPosition" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Sidebar Position
                     </label>
-                    <select className="w-full px-4 py-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors">
+                    <select id="sidebarPosition" className="w-full px-4 py-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors">
                       <option value="left">Left</option>
                       <option value="right">Right</option>
                     </select>
@@ -241,7 +256,10 @@ export const Settings: React.FC = () => {
 
             {/* Save Button */}
             <div className="px-6 py-4 bg-slate-50 dark:bg-slate-700/50 border-t border-slate-200 dark:border-slate-600 rounded-b-xl">
-              <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium flex items-center space-x-2 transition-colors">
+              <button
+                onClick={handleSave}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium flex items-center space-x-2 transition-colors"
+              >
                 <Save className="h-5 w-5" />
                 <span>Save Changes</span>
               </button>

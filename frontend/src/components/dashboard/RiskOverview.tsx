@@ -1,15 +1,37 @@
 import React from 'react';
 import { Shield, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 
-export const RiskOverview: React.FC = () => {
+interface RiskOverviewProps {
+  metrics: {
+    total_anomalies: number;
+    total_risks: number;
+  } | null;
+}
+
+export const RiskOverview: React.FC<RiskOverviewProps> = ({ metrics }) => {
+  // This is a simplified mapping. A real implementation might
+  // get more granular risk data from the backend.
   const riskData = [
-    { level: 'Critical', count: 7, color: 'bg-red-500', icon: XCircle },
-    { level: 'High', count: 23, color: 'bg-orange-500', icon: AlertTriangle },
-    { level: 'Medium', count: 45, color: 'bg-yellow-500', icon: AlertTriangle },
-    { level: 'Low', count: 128, color: 'bg-emerald-500', icon: CheckCircle },
+    { level: 'High', count: metrics?.total_risks ?? 0, color: 'bg-orange-500', icon: AlertTriangle },
+    { level: 'Medium', count: metrics?.total_anomalies ?? 0, color: 'bg-yellow-500', icon: AlertTriangle },
+    { level: 'Low', count: 0, color: 'bg-emerald-500', icon: CheckCircle },
   ];
 
   const totalRisks = riskData.reduce((sum, risk) => sum + risk.count, 0);
+  if (totalRisks === 0) {
+    // Avoid division by zero and show a default state
+    return (
+      <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 shadow-lg">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-slate-900">Risk Overview</h3>
+          <Shield className="h-5 w-5 text-slate-600" />
+        </div>
+        <div className="text-center text-slate-500 py-8">
+          No risk data available.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 shadow-lg">

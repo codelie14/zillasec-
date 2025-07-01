@@ -17,6 +17,7 @@ const Users = lazy(() => import('./components/users/Users').then(module => ({ de
 const Settings = lazy(() => import('./components/settings/Settings').then(module => ({ default: module.Settings })));
 const ReportDetail = lazy(() => import('./components/reports/ReportDetail').then(module => ({ default: module.ReportDetail })));
 const AIChatPage = lazy(() => import('./pages/AIChatPage').then(module => ({ default: module.AIChatPage })));
+const DatabasePage = lazy(() => import('./pages/DatabasePage').then(module => ({ default: module.default })));
 
 function App() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(null);
@@ -50,6 +51,7 @@ function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/reports/:id" element={<ReportDetail />} />
             <Route path="/ai-chat" element={<AIChatPage />} />
+            <Route path="/database" element={<DatabasePage />} />
           </Routes>
         </Suspense>
       </Layout>

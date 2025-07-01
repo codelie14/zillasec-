@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MetricsCard } from './MetricsCard';
 import { RecentAnalyses } from './RecentAnalyses';
 import { RiskOverview } from './RiskOverview';
+import { AnalysisResponse } from '../../types/analysis';
 import { 
   FileText, 
   Users, 
@@ -21,17 +22,30 @@ interface DashboardMetrics {
 export const Dashboard: React.FC = () => {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [recentAnalyses, setRecentAnalyses] = useState<AnalysisResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchMetrics = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/dashboard/metrics/');
-        if (!response.ok) {
+        const [metricsRes, analysesRes] = await Promise.all([
+          fetch('http://127.0.0.1:8000/dashboard/metrics/'),
+          fetch('http://127.0.0.1:8000/analyses/?limit=5')
+        ]);
+
+        if (!metricsRes.ok) {
           throw new Error('Failed to fetch dashboard metrics');
         }
-        const data: DashboardMetrics = await response.json();
-        setMetrics(data);
+        if (!analysesRes.ok) {
+          throw new Error('Failed to fetch recent analyses');
+        }
+
+        const metricsData: DashboardMetrics = await metricsRes.json();
+        const analysesData: AnalysisResponse[] = await analysesRes.json();
+        
+        setMetrics(metricsData);
+        setRecentAnalyses(analysesData);
+
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -39,7 +53,7 @@ export const Dashboard: React.FC = () => {
       }
     };
 
-    fetchMetrics();
+    fetchData();
   }, []);
 
   if (loading) {
@@ -111,8 +125,8 @@ export const Dashboard: React.FC = () => {
 
       {/* Charts and Tables Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <RiskOverview />
-        <RecentAnalyses />
+        <RiskOverview metrics={metrics} />
+        <RecentAnalyses analyses={recentAnalyses} />
       </div>
     </div>
   );
