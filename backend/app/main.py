@@ -100,7 +100,7 @@ def analyze_data_with_openrouter(data_json: str, api_key: str, instruction: str)
                 "Authorization": f"Bearer {api_key}",
             },
             json={
-                "model": "meta-llama/llama-3-70b-instruct",
+                "model": "meta-llama/llama-3.3-70b-instruct:free",
                 "messages": [
                     {"role": "system", "content": instruction},
                     {"role": "user", "content": data_json}

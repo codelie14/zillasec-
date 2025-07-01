@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Send, Bot, User, FileText, Database } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   sender: 'user' | 'ai';
@@ -73,19 +75,19 @@ export const AIChatPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
+      <div className="p-6 border-b border-slate-200 dark:border-slate-700">
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">AI Chat</h1>
         <p className="text-slate-600 dark:text-slate-300">Discuss with the AI about a file or the entire database.</p>
         <div className="mt-4 flex items-center space-x-2">
-          <button 
+          <button
             onClick={() => setChatContext('database')}
             className={`px-3 py-1 rounded-full text-sm flex items-center space-x-1 ${chatContext === 'database' ? 'bg-blue-600 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}
           >
             <Database className="h-4 w-4" />
             <span>Database</span>
           </button>
-          <button 
+          <button
             onClick={() => setChatContext('file')}
             className={`px-3 py-1 rounded-full text-sm flex items-center space-x-1 ${chatContext === 'file' ? 'bg-blue-600 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}
           >
@@ -94,15 +96,17 @@ export const AIChatPage: React.FC = () => {
           </button>
         </div>
       </div>
-      <div className="flex-grow p-4 overflow-y-auto">
-        <div className="space-y-4">
+      <div className="flex-grow p-6 overflow-y-auto">
+        <div className="max-w-4xl mx-auto w-full space-y-6">
           {messages.map((msg, index) => (
-            <div key={index} className={`flex items-start space-x-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
-              {msg.sender === 'ai' && <Bot className="h-6 w-6 text-blue-500" />}
-              <div className={`p-3 rounded-lg ${msg.sender === 'ai' ? 'bg-slate-100 dark:bg-slate-700' : 'bg-blue-500 text-white'}`}>
-                <p>{msg.text}</p>
+            <div key={index} className={`flex items-start gap-4 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
+              {msg.sender === 'ai' && <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center text-white"><Bot /></div>}
+              <div className={`p-4 rounded-lg max-w-2xl ${msg.sender === 'ai' ? 'bg-slate-100 dark:bg-slate-700' : 'bg-blue-500 text-white'}`}>
+                <div className="prose dark:prose-invert max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+                </div>
               </div>
-              {msg.sender === 'user' && <User className="h-6 w-6 text-slate-500" />}
+              {msg.sender === 'user' && <div className="flex-shrink-0 h-10 w-10 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center"><User /></div>}
             </div>
           ))}
           {isLoading && (
@@ -119,8 +123,8 @@ export const AIChatPage: React.FC = () => {
           )}
         </div>
       </div>
-      <div className="p-4 border-t border-slate-200 dark:border-slate-700">
-        <div className="flex items-center space-x-2">
+      <div className="p-6 border-t border-slate-200 dark:border-slate-700">
+        <div className="max-w-4xl mx-auto w-full flex items-center space-x-4">
           <input
             type="text"
             value={input}
