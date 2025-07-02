@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Copy, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, Copy, Eye, Star } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Template } from '../../types/template';
 import { TemplateForm } from './TemplateForm';
 
@@ -11,6 +12,7 @@ export const Templates: React.FC = () => {
   const [selectedType, setSelectedType] = useState<'all' | Template['type']>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const navigate = useNavigate();
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -31,6 +33,64 @@ export const Templates: React.FC = () => {
   useEffect(() => {
     fetchTemplates();
   }, []);
+
+  const handleUseTemplate = (template: Template) => {
+    navigate('/upload', { state: { templateInstruction: template.content } });
+  };
+
+  const handleSetDefault = async (templateToSet: Template) => {
+    // Optimistically update the UI
+    const originalTemplates = templates;
+    const newTemplates = templates.map(t => ({
+      ...t,
+      isDefault: t.id === templateToSet.id
+    }));
+    setTemplates(newTemplates);
+
+    try {
+      // Create a list of update promises
+      const updatePromises = [];
+
+      // Unset the old default if it exists and is different
+      const oldDefault = originalTemplates.find(t => t.isDefault && t.id !== templateToSet.id);
+      if (oldDefault) {
+        const { id, created_at, last_used, usage_count, ...rest } = oldDefault;
+        updatePromises.push(
+          fetch(`http://localhost:8000/templates/${oldDefault.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...rest, is_default: false }),
+          })
+        );
+      }
+
+      // Set the new default
+      const { id, created_at, last_used, usage_count, ...rest } = templateToSet;
+      updatePromises.push(
+        fetch(`http://localhost:8000/templates/${templateToSet.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...rest, is_default: true }),
+        })
+      );
+
+      const responses = await Promise.all(updatePromises);
+
+      for (const response of responses) {
+        if (!response.ok) {
+          throw new Error('Failed to update one or more templates.');
+        }
+      }
+      
+      // Fetch templates again to ensure UI is in sync with DB
+      fetchTemplates();
+
+    } catch (err) {
+      // If any request fails, revert the optimistic update
+      setTemplates(originalTemplates);
+      alert(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   const handleDelete = async (id: number) => {
     if (window.confirm('Are you sure you want to delete this template?')) {
@@ -58,7 +118,7 @@ export const Templates: React.FC = () => {
     setIsFormOpen(true);
   };
 
-  const handleSave = async (templateData: Omit<Template, 'id' | 'createdAt' | 'lastUsed' | 'usageCount'>) => {
+  const handleSave = async (templateData: Omit<Template, 'id' | 'created_at' | 'last_used' | 'usage_count'>) => {
     const url = editingTemplate
       ? `http://localhost:8000/templates/${editingTemplate.id}`
       : 'http://localhost:8000/templates/';
@@ -178,7 +238,7 @@ export const Templates: React.FC = () => {
         <div className="xl:col-span-2 space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {filteredTemplates.map((template) => (
-              <div key={template.id} className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 dark:border-slate-700 shadow-lg hover:shadow-xl transition-all duration-300">
+              <div key={template.id} className={`bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 dark:border-slate-700 shadow-lg hover:shadow-xl transition-all duration-300 ${template.isDefault ? 'ring-2 ring-blue-500' : ''}`}>
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center space-x-3">
                     <div className="text-2xl">{getTypeIcon(template.type)}</div>
@@ -206,11 +266,13 @@ export const Templates: React.FC = () => {
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
-                    <button aria-label="Preview template" className="p-2 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button aria-label="Copy template" className="p-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
-                      <Copy className="h-4 w-4" />
+                    <button
+                      onClick={() => handleSetDefault(template)}
+                      disabled={template.isDefault}
+                      aria-label="Set as default"
+                      className="p-2 text-slate-600 dark:text-slate-300 hover:text-yellow-500 dark:hover:text-yellow-400 disabled:text-yellow-500 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Star className={`h-4 w-4 ${template.isDefault ? 'fill-current' : ''}`} />
                     </button>
                     <button onClick={() => handleEdit(template)} aria-label="Edit template" className="p-2 text-slate-600 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-400 transition-colors">
                       <Edit className="h-4 w-4" />
@@ -224,7 +286,7 @@ export const Templates: React.FC = () => {
                     </button>
                   </div>
                   
-                  <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors">
+                  <button onClick={() => handleUseTemplate(template)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors">
                     Use Template
                   </button>
                 </div>
@@ -245,3 +307,5 @@ export const Templates: React.FC = () => {
     </div>
   );
 };
+
+export default Templates;

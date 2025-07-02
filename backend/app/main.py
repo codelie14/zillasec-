@@ -3,7 +3,7 @@ import json
 import datetime
 import pandas as pd
 import requests
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form
 from sqlalchemy import func, inspect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -115,6 +115,7 @@ def analyze_data_with_openrouter(data_json: str, api_key: str, instruction: str)
 @app.post("/analyze/", response_model=AnalysisResponse)
 async def analyze_file(
     file: UploadFile = File(...),
+    instruction: str = Form("Analysez ces données d'accès et identifiez: 1) Les anomalies, 2) Les risques potentiels, 3) Les suggestions d'amélioration. Structurez la réponse en JSON en suivant ce schéma : {\"synthese\": \"\", \"anomalies\": [], \"risques\": [], \"recommandations\": [], \"metriques\": {\"score_risque\": 0.0, \"confiance_analyse\": 0.0}}."),
     app_settings: Settings = Depends(get_settings),
     db: Session = Depends(get_db)
 ):
@@ -140,7 +141,7 @@ async def analyze_file(
 
     data_json = df.to_json(orient='records')
 
-    instruction = "Analysez ces données d'accès et identifiez: 1) Les anomalies, 2) Les risques potentiels, 3) Les suggestions d'amélioration. Structurez la réponse en JSON en suivant ce schéma : {\"synthese\": \"\", \"anomalies\": [], \"risques\": [], \"recommandations\": [], \"metriques\": {\"score_risque\": 0.0, \"confiance_analyse\": 0.0}}."
+    
     ai_response_raw = analyze_data_with_openrouter(data_json, app_settings.OPENROUTER_API_KEY, instruction)
     
     try:

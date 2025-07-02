@@ -1,5 +1,6 @@
-import React, { useCallback, useState } from 'react';
-import { Upload, File as FileIcon, X, CheckCircle, AlertCircle } from 'lucide-react';
+import React, { useCallback, useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { Upload, File as FileIcon, X, CheckCircle, AlertCircle, Bot } from 'lucide-react';
 import { AnalysisResponse } from '../../types/analysis';
 
 interface UploadedFile {
@@ -13,9 +14,28 @@ interface FileUploadProps {
   onAnalysisComplete: (result: AnalysisResponse) => void;
 }
 
+const DEFAULT_INSTRUCTION = `Analysez ces données d'accès et identifiez: 1) Les anomalies, 2) Les risques potentiels, 3) Les suggestions d'amélioration. Structurez la réponse en JSON en suivant ce schéma : {
+  "synthese": "",
+  "anomalies": [],
+  "risques": [],
+  "recommandations": [],
+  "metriques": {
+    "score_risque": 0.0,
+    "confiance_analyse": 0.0
+  }
+}`;
+
 export const FileUpload: React.FC<FileUploadProps> = ({ onAnalysisComplete }) => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
+  const [instruction, setInstruction] = useState(DEFAULT_INSTRUCTION);
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.templateInstruction) {
+      setInstruction(location.state.templateInstruction);
+    }
+  }, [location.state]);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -73,6 +93,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onAnalysisComplete }) =>
 
     const formData = new FormData();
     formData.append('file', fileToAnalyze.file);
+    formData.append('instruction', instruction);
 
     try {
       const response = await fetch('http://127.0.0.1:8000/analyze/', {
@@ -118,6 +139,28 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onAnalysisComplete }) =>
       <div>
         <h2 className="text-2xl font-bold text-slate-900 mb-2">File Analysis</h2>
         <p className="text-slate-600">Upload Excel or CSV files for AI-powered security analysis</p>
+      </div>
+
+      {/* Instruction Text Area */}
+      <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 shadow-lg">
+        <label htmlFor="instruction" className="flex items-center text-lg font-semibold text-slate-900 mb-3">
+          <Bot className="h-6 w-6 mr-2 text-blue-600" />
+          <span>Analysis Instruction (Prompt)</span>
+        </label>
+        <textarea
+          id="instruction"
+          value={instruction}
+          onChange={(e) => setInstruction(e.target.value)}
+          rows={6}
+          className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+          placeholder="Enter the analysis instruction for the AI..."
+        />
+        <button 
+          onClick={() => setInstruction(DEFAULT_INSTRUCTION)}
+          className="mt-3 text-sm text-slate-600 hover:text-blue-600 transition-colors"
+        >
+          Reset to Default
+        </button>
       </div>
 
       {/* Upload Zone */}
