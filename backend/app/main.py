@@ -180,6 +180,24 @@ async def analyze_file(
     db.commit()
     db.refresh(db_analysis)
 
+    # Save file data to the new table
+    for index, row in df.iterrows():
+        file_data = models.FileData(
+            nom=row.get("Nom"),
+            prenom=row.get("Prenom"),
+            id_huawei=row.get("Id Huawei"),
+            cuid=row.get("CUID"),
+            mail_huawei=row.get("Mail Huawei"),
+            mail_orange=row.get("Mail Orange"),
+            numero_telephone=row.get("Numero de Telephone"),
+            domaine=row.get("Domaine"),
+            cluster=row.get("Cluster"),
+            statut=row.get("Statut"),
+            analysis_id=db_analysis.id,
+        )
+        db.add(file_data)
+    db.commit()
+
     return AnalysisResponse(
         id=db_analysis.id,
         fichier_details=file_details,

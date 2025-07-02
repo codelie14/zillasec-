@@ -24,6 +24,24 @@ class Analysis(Base):
     # Metrics
     risk_score = Column(Float)
     confidence = Column(Float)
+
+class FileData(Base):
+    __tablename__ = "file_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nom = Column(String)
+    prenom = Column(String)
+    id_huawei = Column(String)
+    cuid = Column(String)
+    mail_huawei = Column(String)
+    mail_orange = Column(String)
+    numero_telephone = Column(String)
+    domaine = Column(String)
+    cluster = Column(String)
+    statut = Column(String)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    analysis_id = Column(Integer, nullable=True)
+
 class Template(Base):
     __tablename__ = "templates"
 
