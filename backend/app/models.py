@@ -32,6 +32,8 @@ class FileData(Base):
     domaine = Column(String)
     cluster = Column(String)
     statut = Column(String)
+    perimeter = Column(String, nullable=True)  # New column
+    affiliate = Column(String, nullable=True)  # New column
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     analysis_id = Column(Integer, nullable=True)
 

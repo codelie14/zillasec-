@@ -369,6 +369,71 @@ async def chat_with_ai(
 def get_conversations(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     conversations = db.query(models.Conversation).order_by(models.Conversation.created_at.desc()).offset(skip).limit(limit).all()
     return conversations
+
+# Pydantic Models for FileData
+class FileDataBase(BaseModel):
+    nom: str | None = None
+    prenom: str | None = None
+    id_huawei: str | None = None
+    cuid: str | None = None
+    mail_huawei: str | None = None
+    mail_orange: str | None = None
+    numero_telephone: str | None = None
+    domaine: str | None = None
+    cluster: str | None = None
+    statut: str | None = None
+    analysis_id: int | None = None
+
+class FileDataCreate(FileDataBase):
+    pass
+
+class FileDataUpdate(FileDataBase):
+    pass
+
+class FileDataInDB(FileDataBase):
+    id: int
+    created_at: datetime.datetime
+
+    class Config:
+        orm_mode = True
+
+# FileData CRUD Endpoints
+@app.get("/filedata/", response_model=List[FileDataInDB])
+def read_file_data(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    file_data = db.query(models.FileData).offset(skip).limit(limit).all()
+    return file_data
+
+@app.get("/filedata/{file_data_id}", response_model=FileDataInDB)
+def read_single_file_data(file_data_id: int, db: Session = Depends(get_db)):
+    db_file_data = db.query(models.FileData).filter(models.FileData.id == file_data_id).first()
+    if db_file_data is None:
+        raise HTTPException(status_code=404, detail="FileData not found")
+    return db_file_data
+
+@app.put("/filedata/{file_data_id}", response_model=FileDataInDB)
+def update_file_data(file_data_id: int, file_data: FileDataUpdate, db: Session = Depends(get_db)):
+    db_file_data = db.query(models.FileData).filter(models.FileData.id == file_data_id).first()
+    if db_file_data is None:
+        raise HTTPException(status_code=404, detail="FileData not found")
+    
+    update_data = file_data.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_file_data, key, value)
+    
+    db.commit()
+    db.refresh(db_file_data)
+    return db_file_data
+
+@app.delete("/filedata/{file_data_id}", response_model=FileDataInDB)
+def delete_file_data(file_data_id: int, db: Session = Depends(get_db)):
+    db_file_data = db.query(models.FileData).filter(models.FileData.id == file_data_id).first()
+    if db_file_data is None:
+        raise HTTPException(status_code=404, detail="FileData not found")
+    
+    db.delete(db_file_data)
+    db.commit()
+    return db_file_data
+
 import datetime
 
 # Pydantic Models for Templates

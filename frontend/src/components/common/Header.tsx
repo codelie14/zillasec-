@@ -1,9 +1,14 @@
 import React from 'react';
-import { Bell, Settings, User, Shield, Moon, Sun } from 'lucide-react';
+import { Bell, Settings, User, Shield, Moon, Sun, Menu, X } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useNavigation } from '../../hooks/useNavigation';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  isSidebarOpen: boolean;
+  toggleSidebar: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ isSidebarOpen, toggleSidebar }) => {
   const { theme, toggleTheme } = useTheme();
   const { navigateTo } = useNavigation();
 
@@ -11,6 +16,12 @@ export const Header: React.FC = () => {
     <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 px-6 py-4 fixed top-0 left-0 right-0 z-50 transition-colors duration-300">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
+          <button
+            onClick={toggleSidebar}
+            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            {isSidebarOpen ? <X className="h-6 w-6 text-slate-600 dark:text-slate-300" /> : <Menu className="h-6 w-6 text-slate-600 dark:text-slate-300" />}
+          </button>
           <Shield className="h-8 w-8 text-blue-600 dark:text-blue-400" />
           <div>
             <h1 className="text-xl font-bold text-slate-900 dark:text-white">ZillaSec</h1>

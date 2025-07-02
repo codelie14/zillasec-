@@ -144,7 +144,7 @@ const DatabasePage: React.FC = () => {
 
     return (
       <div className="overflow-x-auto">
-        <table className="min-w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+        <table className="table-auto w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
           <thead>
             <tr className="bg-slate-50 dark:bg-slate-700">
               {headers.map((header) => (
