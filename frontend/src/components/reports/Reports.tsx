@@ -59,11 +59,9 @@ export const Reports: React.FC = () => {
     }
   };
 
-  const filteredReports = analyses.filter(report => {
-    const matchesSearch = report.fichier_details.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         report.resultat_analyse.synthese.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
+  const filteredReports = analyses.filter(report => 
+    report.fichier_details.nom.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   if (loading) {
     return <div>Loading...</div>;
@@ -110,8 +108,16 @@ export const Reports: React.FC = () => {
                   <div className="text-3xl">📄</div>
                   <div>
                     <h3 className="font-semibold text-slate-900 dark:text-white">{report.fichier_details.nom}</h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-300">{report.resultat_analyse.synthese}</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-300">
+                      {`Analyzed on ${new Date(report.resultat_analyse.metadata.date_analyse).toLocaleString()}`}
+                    </p>
                     <div className="flex items-center space-x-4 mt-2">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        {`Total Accounts: ${report.resultat_analyse.statistiques.total_comptes}`}
+                      </span>
+                       <span className="text-xs text-slate-500 dark:text-slate-400">
+                        |
+                      </span>
                       <span className="text-xs text-slate-500 dark:text-slate-400">
                         {(report.fichier_details.taille / 1024).toFixed(1)} KB
                       </span>

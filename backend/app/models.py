@@ -16,14 +16,7 @@ class Analysis(Base):
     file_rows = Column(Integer)
 
     # Analysis results
-    summary = Column(String)
-    anomalies = Column(JSON)
-    risks = Column(JSON)
-    recommendations = Column(JSON)
-    
-    # Metrics
-    risk_score = Column(Float)
-    confidence = Column(Float)
+    analysis_result = Column(JSON)
 
 class FileData(Base):
     __tablename__ = "file_data"

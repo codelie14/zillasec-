@@ -58,16 +58,50 @@ class Conversation(BaseModel):
     class Config:
         orm_mode = True
 
-class FileAnalysisMetrics(BaseModel):
-    score_risque: float
-    confiance_analyse: float
+class Metadata(BaseModel):
+    fichier: str
+    date_analyse: str
+    lignes_analysees: int
 
-class FileAnalysisResult(BaseModel):
-    synthese: str
-    anomalies: List[str]
-    risques: List[str]
-    recommandations: List[str]
-    metriques: FileAnalysisMetrics
+class Statistiques(BaseModel):
+    total_comptes: int
+    comptes_actifs: int
+    comptes_desactives: int
+    comptes_admin: int
+    comptes_filiale: int
+    comptes_support: int
+
+class IncoherenceStatut(BaseModel):
+    nom: str
+    prenom: str
+    statut_fichier: str
+    statut_bd: str
+
+class VerificationBD(BaseModel):
+    comptes_presents: int
+    comptes_absents: int
+    incoherences_statut: List[IncoherenceStatut]
+
+class Alertes(BaseModel):
+    admin_desactives: int
+    acces_sensibles_desactives: int
+    doublons_cuid: List[str]
+
+class DetailCompte(BaseModel):
+    nom: str
+    prenom: str
+    id_huawei: str
+    cuid: str
+    statut: str
+    present_en_bd: bool
+    statut_bd: str | None
+
+class CustomAnalysisResult(BaseModel):
+    metadata: Metadata
+    statistiques: Statistiques
+    verification_bd: VerificationBD
+    alertes: Alertes
+    details_comptes: List[DetailCompte]
 
 class FileDetails(BaseModel):
     nom: str
@@ -79,10 +113,10 @@ class FileDetails(BaseModel):
 class AnalysisResponse(BaseModel):
     id: int
     fichier_details: FileDetails
-    resultat_analyse: FileAnalysisResult
+    resultat_analyse: CustomAnalysisResult
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # Dependency to get settings
 def get_settings() -> Settings:
@@ -158,9 +192,10 @@ async def analyze_file(
         json_string = analysis_content[json_start_index:json_end_index]
         
         analysis_result_data = json.loads(json_string)
-        analysis_result = FileAnalysisResult(**analysis_result_data)
+        # Validate with the new Pydantic model
+        analysis_result = CustomAnalysisResult(**analysis_result_data)
     except (KeyError, IndexError, json.JSONDecodeError, ValueError) as e:
-        raise HTTPException(status_code=500, detail=f"Could not parse AI response: {e} - Raw content was: {analysis_content}")
+        raise HTTPException(status_code=500, detail=f"Could not parse or validate AI response: {e} - Raw content was: {analysis_content}")
 
     # Save to DB
     db_analysis = models.Analysis(
@@ -169,39 +204,38 @@ async def analyze_file(
         file_size=file_details.taille,
         file_columns=file_details.colonnes,
         file_rows=file_details.lignes,
-        summary=analysis_result.synthese,
-        anomalies=analysis_result.anomalies,
-        risks=analysis_result.risques,
-        recommendations=analysis_result.recommandations,
-        risk_score=analysis_result.metriques.score_risque,
-        confidence=analysis_result.metriques.confiance_analyse,
+        analysis_result=analysis_result.dict(),
     )
     db.add(db_analysis)
     db.commit()
     db.refresh(db_analysis)
 
     # Save file data to the new table
-    for index, row in df.iterrows():
-        file_data = models.FileData(
-            nom=row.get("Nom"),
-            prenom=row.get("Prenom"),
-            id_huawei=row.get("Id Huawei"),
-            cuid=row.get("CUID"),
-            mail_huawei=row.get("Mail Huawei"),
-            mail_orange=row.get("Mail Orange"),
-            numero_telephone=row.get("Numero de Telephone"),
-            domaine=row.get("Domaine"),
-            cluster=row.get("Cluster"),
-            statut=row.get("Statut"),
-            analysis_id=db_analysis.id,
-        )
-        db.add(file_data)
-    db.commit()
+    try:
+        for index, row in df.iterrows():
+            file_data = models.FileData(
+                nom=row.get("Nom"),
+                prenom=row.get("Prenom"),
+                id_huawei=row.get("Id Huawei"),
+                cuid=row.get("CUID"),
+                mail_huawei=row.get("Mail Huawei"),
+                mail_orange=row.get("Mail Orange"),
+                numero_telephone=row.get("Numero de Telephone"),
+                domaine=row.get("Domaine"),
+                cluster=row.get("Cluster"),
+                statut=row.get("Statut"),
+                analysis_id=db_analysis.id,
+            )
+            db.add(file_data)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error saving file data to database: {e}")
 
     return AnalysisResponse(
         id=db_analysis.id,
         fichier_details=file_details,
-        resultat_analyse=analysis_result
+        resultat_analyse=analysis_result_data
     )
 
 @app.get("/analyses/", response_model=List[AnalysisResponse])
@@ -218,16 +252,7 @@ def get_analyses(skip: int = 0, limit: int = 100, db: Session = Depends(get_db))
                 colonnes=analysis.file_columns,
                 lignes=analysis.file_rows,
             ),
-            resultat_analyse=FileAnalysisResult(
-                synthese=analysis.summary,
-                anomalies=analysis.anomalies,
-                risques=analysis.risks,
-                recommandations=analysis.recommendations,
-                metriques=FileAnalysisMetrics(
-                    score_risque=analysis.risk_score,
-                    confiance_analyse=analysis.confidence,
-                )
-            )
+            resultat_analyse=analysis.analysis_result
         ))
     return response
 
@@ -246,16 +271,7 @@ def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
             colonnes=analysis.file_columns,
             lignes=analysis.file_rows,
         ),
-        resultat_analyse=FileAnalysisResult(
-            synthese=analysis.summary,
-            anomalies=analysis.anomalies,
-            risques=analysis.risks,
-            recommandations=analysis.recommendations,
-            metriques=FileAnalysisMetrics(
-                score_risque=analysis.risk_score,
-                confiance_analyse=analysis.confidence,
-            )
-        )
+        resultat_analyse=analysis.analysis_result
     )
 
 class DashboardMetrics(BaseModel):
@@ -267,9 +283,10 @@ class DashboardMetrics(BaseModel):
 @app.get("/dashboard/metrics/", response_model=DashboardMetrics)
 def get_dashboard_metrics(db: Session = Depends(get_db)):
     total_analyses = db.query(models.Analysis).count()
-    avg_risk_score = db.query(func.avg(models.Analysis.risk_score)).scalar() or 0
-    total_anomalies = db.query(func.sum(func.json_array_length(models.Analysis.anomalies))).scalar() or 0
-    total_risks = db.query(func.sum(func.json_array_length(models.Analysis.risks))).scalar() or 0
+    # The following metrics are no longer available with flexible analysis results
+    avg_risk_score = 0
+    total_anomalies = 0
+    total_risks = 0
 
     return DashboardMetrics(
         total_analyses=total_analyses,

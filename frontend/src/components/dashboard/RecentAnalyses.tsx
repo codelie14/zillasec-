@@ -8,7 +8,8 @@ interface RecentAnalysesProps {
 
 export const RecentAnalyses: React.FC<RecentAnalysesProps> = ({ analyses }) => {
 
-  const getRiskColor = (score: number) => {
+  const getRiskColor = (score: number | undefined) => {
+    if (score === undefined) return 'text-slate-600 bg-slate-100';
     if (score >= 80) return 'text-red-600 bg-red-100';
     if (score >= 60) return 'text-orange-600 bg-orange-100';
     if (score >= 40) return 'text-yellow-600 bg-yellow-100';
@@ -36,8 +37,8 @@ export const RecentAnalyses: React.FC<RecentAnalysesProps> = ({ analyses }) => {
             </div>
             
             <div className="flex items-center space-x-2">
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRiskColor(analysis.resultat_analyse.metriques.score_risque)}`}>
-                Risk: {analysis.resultat_analyse.metriques.score_risque.toFixed(0)}
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRiskColor(analysis.resultat_analyse?.metriques?.score_risque)}`}>
+                Risk: {analysis.resultat_analyse?.metriques?.score_risque?.toFixed(0) ?? 'N/A'}
               </span>
             </div>
           </div>
