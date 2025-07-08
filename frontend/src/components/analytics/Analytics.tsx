@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { TrendingUp, BarChart3, PieChart, Activity, Calendar, Download } from 'lucide-react';
+import { TrendingUp, Users, UserPlus, Download, PieChart, LineChart } from 'lucide-react';
 import { Line, Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -24,240 +24,170 @@ ChartJS.register(
   Legend
 );
 
+// Mock data based on GEMINI.md
+const affiliates = ["OCI", "OCD", "OCF", "OCM", "OGN", "OGB", "OBW", "OSL", "OSN", "OML", "OLB", "OMG"];
+
+const allAffiliateData = [
+  { affiliate: 'OCD', total: 742, active: 635, change: '+1.2%', cluster: 'ABIDJAN' },
+  { affiliate: 'OCI', total: 598, active: 512, change: '+0.8%', cluster: 'ABIDJAN' },
+  { affiliate: 'OCF', total: 421, active: 362, change: '+1.5%', cluster: 'ABIDJAN' },
+  { affiliate: 'OGN', total: 387, active: 321, change: '-0.4%', cluster: 'DAKAR' },
+  { affiliate: 'OCM', total: 250, active: 210, change: '+0.5%', cluster: 'ABIDJAN' },
+  { affiliate: 'OGB', total: 180, active: 150, change: '-1.1%', cluster: 'DAKAR' },
+  { affiliate: 'OBW', total: 120, active: 110, change: '+2.0%', cluster: 'DAKAR' },
+  { affiliate: 'OSL', total: 90, active: 80, change: '+0.1%', cluster: 'ABIDJAN' },
+  { affiliate: 'OSN', total: 50, active: 45, change: '+5.0%', cluster: 'DAKAR' },
+  { affiliate: 'OML', total: 25, active: 20, change: '0%', cluster: 'ABIDJAN' },
+  { affiliate: 'OLB', total: 15, active: 12, change: '-3.0%', cluster: 'DAKAR' },
+  { affiliate: 'OMG', total: 8, active: 5, change: '+1.0%', cluster: 'ABIDJAN' },
+];
+
+const evolutionData = [
+  { date: "2025-06-01", "active_accounts": 2310, cluster: 'ABIDJAN' },
+  { date: "2025-06-15", "active_accounts": 2385, cluster: 'ABIDJAN' },
+  { date: "2025-06-30", "active_accounts": 2412, cluster: 'ABIDJAN' },
+  { date: "2025-07-01", "active_accounts": 2420, cluster: 'DAKAR' },
+  { date: "2025-07-15", "active_accounts": 2450, cluster: 'DAKAR' },
+  { date: "2025-07-30", "active_accounts": 2480, cluster: 'DAKAR' },
+];
+
 export const Analytics: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
-  const [selectedMetric, setSelectedMetric] = useState('analyses');
-  const [selectedPerimeter, setSelectedPerimeter] = useState('all');
+  const [selectedCluster, setSelectedCluster] = useState('all');
   const [selectedAffiliate, setSelectedAffiliate] = useState('all');
 
-  const rawAnalysisTrendsData = [
-    { date: '2025-06-25', analyses: 10, perimeter: 'IN', affiliate: 'ABIDJAN' },
-    { date: '2025-06-26', analyses: 12, perimeter: 'VAS', affiliate: 'DAKAR' },
-    { date: '2025-06-27', analyses: 8, perimeter: 'IN', affiliate: 'ABIDJAN' },
-    { date: '2025-06-28', analyses: 15, perimeter: 'CS', affiliate: 'ABIDJAN' },
-    { date: '2025-06-29', analyses: 11, perimeter: 'IN', affiliate: 'DAKAR' },
-    { date: '2025-06-30', analyses: 13, perimeter: 'PS', affiliate: 'ABIDJAN' },
-    { date: '2025-07-01', analyses: 14, perimeter: 'IN', affiliate: 'ABIDJAN' },
-  ];
+  const filteredData = useMemo(() => {
+    return allAffiliateData
+      .filter(d => selectedCluster === 'all' || d.cluster === selectedCluster)
+      .filter(d => selectedAffiliate === 'all' || d.affiliate === selectedAffiliate);
+  }, [selectedCluster, selectedAffiliate]);
 
-  const rawRiskDistributionData = [
-    { name: 'High Risk', value: 400, perimeter: 'IN', affiliate: 'ABIDJAN' },
-    { name: 'Medium Risk', value: 300, perimeter: 'VAS', affiliate: 'DAKAR' },
-    { name: 'Low Risk', value: 200, perimeter: 'CS', affiliate: 'ABIDJAN' },
-    { name: 'No Risk', value: 100, perimeter: 'PS', affiliate: 'DAKAR' },
-  ];
+  const filteredEvolutionData = useMemo(() => {
+    return evolutionData.filter(d => selectedCluster === 'all' || d.cluster === selectedCluster);
+  }, [selectedCluster]);
 
-  const filteredAnalysisTrendsData = useMemo(() => {
-    return rawAnalysisTrendsData.filter(data =>
-      (selectedPerimeter === 'all' || data.perimeter === selectedPerimeter) &&
-      (selectedAffiliate === 'all' || data.affiliate === selectedAffiliate)
-    );
-  }, [selectedPerimeter, selectedAffiliate]);
+  const keyMetrics = useMemo(() => {
+    const totalAccounts = filteredData.reduce((sum, item) => sum + item.total, 0);
+    const activeAccounts = filteredData.reduce((sum, item) => sum + item.active, 0);
+    const activationRate = totalAccounts > 0 ? (activeAccounts / totalAccounts) * 100 : 0;
+    return {
+      total: { value: totalAccounts.toLocaleString(), change: '+3.1%' },
+      active: { value: `${activeAccounts.toLocaleString()} (${activationRate.toFixed(1)}%)`, change: '+2.4%' },
+      new: { value: '138', change: '-1.2%' },
+    };
+  }, [filteredData]);
 
-  const filteredRiskDistributionData = useMemo(() => {
-    return rawRiskDistributionData.filter(data =>
-      (selectedPerimeter === 'all' || data.perimeter === selectedPerimeter) &&
-      (selectedAffiliate === 'all' || data.affiliate === selectedAffiliate)
-    );
-  }, [selectedPerimeter, selectedAffiliate]);
-
-  const COLORS = ['#EF4444', '#F59E0B', '#3B82F6', '#10B981']; // Tailwind colors for risks
-
-  const analysisTrendsChartData = {
-    labels: filteredAnalysisTrendsData.map(data => data.date),
-    datasets: [
-      {
-        label: 'Analyses',
-        data: filteredAnalysisTrendsData.map(data => data.analyses),
-        borderColor: '#3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.5)',
-        tension: 0.4,
-      },
-    ],
+  const pieChartData = {
+    labels: filteredData.slice(0, 5).map(d => d.affiliate),
+    datasets: [{
+      data: filteredData.slice(0, 5).map(d => d.active),
+      backgroundColor: ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f'],
+    }],
   };
 
-  const analysisTrendsChartOptions = {
-    responsive: true,
-    plugins: {
-      legend: { position: 'top' as const },
-      title: { display: false },
-    },
-    scales: {
-      x: { ticks: { color: '#64748B' } }, // slate-500/600
-      y: { ticks: { color: '#64748B' } },
-    },
-  };
-
-  const riskDistributionChartData = {
-    labels: filteredRiskDistributionData.map(data => data.name),
-    datasets: [
-      {
-        data: filteredRiskDistributionData.map(data => data.value),
-        backgroundColor: COLORS,
-        borderColor: COLORS,
-        borderWidth: 1,
-      },
-    ],
-  };
-
-  const riskDistributionChartOptions = {
-    responsive: true,
-    plugins: {
-      legend: { position: 'right' as const },
-      title: { display: false },
-    },
+  const lineChartData = {
+    labels: filteredEvolutionData.map(d => d.date),
+    datasets: [{
+      label: 'Comptes Actifs',
+      data: filteredEvolutionData.map(d => d.active_accounts),
+      borderColor: '#4e79a7',
+      tension: 0.3,
+    }],
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Header and Filters */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Analytics</h1>
-          <p className="text-slate-600 dark:text-slate-300">Detailed insights and performance metrics</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Analytics Dashboard</h1>
+          <p className="text-slate-600 dark:text-slate-300">Focus sur les comptes actifs et leur évolution.</p>
         </div>
         <div className="flex items-center space-x-3">
           <select
             value={selectedPeriod}
             onChange={(e) => setSelectedPeriod(e.target.value)}
-            className="px-4 py-2 bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
           >
-            <option value="7d">Last 7 days</option>
             <option value="30d">Last 30 days</option>
             <option value="90d">Last 90 days</option>
             <option value="1y">Last year</option>
           </select>
           <select
-            value={selectedPerimeter}
-            onChange={(e) => setSelectedPerimeter(e.target.value)}
-            className="px-4 py-2 bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+            value={selectedCluster}
+            onChange={(e) => setSelectedCluster(e.target.value)}
+            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
           >
-            <option value="all">All Perimeters</option>
-            <option value="IN">IN</option>
-            <option value="VAS">VAS</option>
-            <option value="CS">CS</option>
-            <option value="PS">PS</option>
-            <option value="IP">IP</option>
-            <option value="TRANS">TRANS</option>
-            <option value="RAN">RAN</option>
-            <option value="CLOUD">CLOUD</option>
-            <option value="DIGITAL">DIGITAL</option>
-            <option value="Security">Security</option>
-            <option value="DAO">DAO</option>
+            <option value="all">All Clusters</option>
+            <option value="ABIDJAN">ABIDJAN (ABJ)</option>
+            <option value="DAKAR">DAKAR (DKR)</option>
           </select>
           <select
             value={selectedAffiliate}
             onChange={(e) => setSelectedAffiliate(e.target.value)}
-            className="px-4 py-2 bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
           >
             <option value="all">All Affiliates</option>
-            <option value="ABIDJAN">ABIDJAN (ABJ)</option>
-            <option value="DAKAR">DAKAR (DKR)</option>
+            {affiliates.map(aff => <option key={aff} value={aff}>{aff}</option>)}
           </select>
-          <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors">
+          <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2">
             <Download className="h-4 w-4" />
-            <span>Export</span>
+            <span>Générer</span>
           </button>
         </div>
       </div>
 
-      {/* Display selected filters */}
-      <div className="text-sm text-slate-500 dark:text-slate-400 mt-4">
-        Showing data for: <span className="font-semibold">{selectedPeriod === '7d' ? 'Last 7 days' : selectedPeriod === '30d' ? 'Last 30 days' : selectedPeriod === '90d' ? 'Last 90 days' : 'Last year'}</span>,
-        Perimeter: <span className="font-semibold">{selectedPerimeter === 'all' ? 'All' : selectedPerimeter}</span>,
-        Affiliate: <span className="font-semibold">{selectedAffiliate === 'all' ? 'All' : selectedAffiliate}</span>
-      </div>
-
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {[
-          { label: 'Total Analyses', value: '2,847', change: '+12%', icon: BarChart3, color: 'blue' },
-          { label: 'Success Rate', value: '94.2%', change: '+2.1%', icon: TrendingUp, color: 'green' },
-          { label: 'Avg Processing Time', value: '18.4s', change: '-5.2%', icon: Activity, color: 'orange' },
-          { label: 'API Efficiency', value: '89.7%', change: '+3.4%', icon: PieChart, color: 'purple' }
-        ].map((metric) => (
-          <div key={metric.label} className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 dark:border-slate-700 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <metric.icon className={`h-8 w-8 text-${metric.color}-500`} />
-              <span className={`text-sm font-medium ${
-                metric.change.startsWith('+') ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-              }`}>
-                {metric.change}
-              </span>
-            </div>
-            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">{metric.value}</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-300">{metric.label}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <MetricCard icon={Users} title="Comptes Totaux" value={keyMetrics.total.value} change={keyMetrics.total.change} />
+        <MetricCard icon={UserPlus} title="Comptes Actifs" value={keyMetrics.active.value} change={keyMetrics.active.change} />
+        <MetricCard icon={TrendingUp} title="Nouveaux Comptes" value={keyMetrics.new.value} change={keyMetrics.new.change} />
       </div>
 
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Analysis Trends */}
-        <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 dark:border-slate-700 shadow-lg">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Analysis Trends</h3>
-            <TrendingUp className="h-5 w-5 text-slate-600 dark:text-slate-300" />
-          </div>
-          
-          <div className="h-64">
-            <Line data={analysisTrendsChartData} options={analysisTrendsChartOptions} />
+      {/* Visualizations */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
+          <h3 className="text-lg font-semibold mb-4">Répartition par Affiliate (Top 5)</h3>
+          <div className="h-64 flex items-center justify-center">
+            <Pie data={pieChartData} options={{ responsive: true, maintainAspectRatio: false }} />
           </div>
         </div>
-
-        {/* Risk Distribution */}
-        <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 dark:border-slate-700 shadow-lg">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Risk Distribution</h3>
-            <PieChart className="h-5 w-5 text-slate-600 dark:text-slate-300" />
-          </div>
-          
+        <div className="lg:col-span-3 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
+          <h3 className="text-lg font-semibold mb-4">Évolution des Comptes</h3>
           <div className="h-64">
-            <Pie data={riskDistributionChartData} options={riskDistributionChartOptions} />
+            <Line data={lineChartData} options={{ responsive: true, maintainAspectRatio: false }} />
           </div>
         </div>
       </div>
 
-      {/* Performance Metrics Table */}
-      <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg">
-        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Performance Breakdown</h3>
+      {/* Details Table */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+        <div className="p-6">
+          <h3 className="text-lg font-semibold">Détails par Affiliate</h3>
         </div>
-        
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full text-sm text-left">
             <thead className="bg-slate-50 dark:bg-slate-700/50">
               <tr>
-                <th className="px-6 py-4 text-left text-sm font-medium text-slate-900 dark:text-white">Metric</th>
-                <th className="px-6 py-4 text-left text-sm font-medium text-slate-900 dark:text-white">Current</th>
-                <th className="px-6 py-4 text-left text-sm font-medium text-slate-900 dark:text-white">Previous</th>
-                <th className="px-6 py-4 text-left text-sm font-medium text-slate-900 dark:text-white">Change</th>
-                <th className="px-6 py-4 text-left text-sm font-medium text-slate-900 dark:text-white">Trend</th>
+                <th className="px-6 py-3 font-medium">Affiliate</th>
+                <th className="px-6 py-3 font-medium">Comptes Total</th>
+                <th className="px-6 py-3 font-medium">Comptes GNOC</th>
+                <th className="px-6 py-3 font-medium">Comptes Affiliate</th>
+                <th className="px-6 py-3 font-medium">Comptes Admin</th>
+                <th className="px-6 py-3 font-medium">Δ Mois</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-              {[
-                { metric: 'Files Processed', current: '2,847', previous: '2,541', change: '+12.0%', trend: 'up', perimeter: 'IN', affiliate: 'ABIDJAN' },
-                { metric: 'Average File Size', current: '2.4 MB', previous: '2.1 MB', change: '+14.3%', trend: 'up', perimeter: 'VAS', affiliate: 'DAKAR' },
-                { metric: 'Processing Speed', current: '18.4s', previous: '19.4s', change: '-5.2%', trend: 'down', perimeter: 'CS', affiliate: 'ABIDJAN' },
-                { metric: 'Error Rate', current: '5.8%', previous: '7.2%', change: '-19.4%', trend: 'down', perimeter: 'PS', affiliate: 'DAKAR' },
-                { metric: 'API Calls', current: '8,247', previous: '7,891', change: '+4.5%', trend: 'up', perimeter: 'IN', affiliate: 'ABIDJAN' }
-              ].filter(row =>
-                (selectedPerimeter === 'all' || row.perimeter === selectedPerimeter) &&
-                (selectedAffiliate === 'all' || row.affiliate === selectedAffiliate)
-              ).map((row) => (
-                <tr key={row.metric} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">{row.metric}</td>
-                  <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{row.current}</td>
-                  <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{row.previous}</td>
-                  <td className={`px-6 py-4 font-medium ${
-                    row.change.startsWith('+') ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-                  }`}>
-                    {row.change}
-                  </td>
-                  <td className="px-6 py-4">
-                    <TrendingUp className={`h-4 w-4 ${
-                      row.trend === 'up' ? 'text-emerald-500' : 'text-red-500'
-                    } ${row.trend === 'down' ? 'rotate-180' : ''}`} />
+              {filteredData.map(item => (
+                <tr key={item.affiliate} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                  <td className="px-6 py-4 font-bold">{item.affiliate}</td>
+                  <td className="px-6 py-4">{item.total.toLocaleString()}</td>
+                  <td className="px-6 py-4">{item.active.toLocaleString()}</td>
+                  <td className="px-6 py-4">{((item.active / item.total) * 100).toFixed(1)}</td>
+                  <td className="px-6 py-4">{((item.active / item.total) * 100).toFixed(1)}</td>
+                  {/* <td className="px-6 py-4">{item.admin.toLocaleString()}</td> */}
+                  <td className={`px-6 py-4 font-medium ${item.change.startsWith('+') ? 'text-emerald-500' : 'text-red-500'}`}>
+                    {item.change}
                   </td>
                 </tr>
               ))}
@@ -268,3 +198,30 @@ export const Analytics: React.FC = () => {
     </div>
   );
 };
+
+// Helper component for Key Metrics
+interface MetricCardProps {
+  icon: React.ElementType;
+  title: string;
+  value: string;
+  change: string;
+}
+
+const MetricCard: React.FC<MetricCardProps> = ({ icon: Icon, title, value, change }) => (
+  <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
+    <div className="flex justify-between items-start">
+      <div className="flex items-center space-x-4">
+        <div className="bg-blue-100 dark:bg-blue-900/50 p-3 rounded-lg">
+          <Icon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+        </div>
+        <div>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">{title}</p>
+          <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
+        </div>
+      </div>
+      <span className={`text-sm font-medium ${change.startsWith('+') ? 'text-emerald-500' : 'text-red-500'}`}>
+        {change}
+      </span>
+    </div>
+  </div>
+);

@@ -19,9 +19,9 @@ depends_on = None
 def upgrade() -> None:
     op.create_table('conversations',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('question', sa.String(), nullable=True),
-    sa.Column('answer', sa.String(), nullable=True),
-    sa.Column('context', sa.String(), nullable=True),
+    sa.Column('question', sa.String(255), nullable=True),
+    sa.Column('answer', sa.String(255), nullable=True),
+    sa.Column('context', sa.String(255), nullable=True),
     sa.Column('file_id', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.PrimaryKeyConstraint('id')
