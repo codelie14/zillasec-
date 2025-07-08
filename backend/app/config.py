@@ -9,6 +9,7 @@ env_path = os.path.join(os.path.dirname(__file__), '.env')
 
 class Settings(BaseSettings):
     OPENROUTER_API_KEY: str
+    MAX_AI_INPUT_ROWS: int = 200 # Reduced default value for AI input rows
 
     model_config = SettingsConfigDict(
         env_file=env_path, 

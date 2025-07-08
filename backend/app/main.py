@@ -134,7 +134,7 @@ def analyze_data_with_openrouter(data_json: str, api_key: str, instruction: str)
                 "Authorization": f"Bearer {api_key}",
             },
             json={
-                "model": "meta-llama/llama-3.3-70b-instruct:free",
+                "model": "deepseek/deepseek-r1-0528-qwen3-8b:free",
                 "messages": [
                     {"role": "system", "content": instruction},
                     {"role": "user", "content": data_json}
@@ -149,7 +149,7 @@ def analyze_data_with_openrouter(data_json: str, api_key: str, instruction: str)
 @app.post("/analyze/", response_model=AnalysisResponse)
 async def analyze_file(
     file: UploadFile = File(...),
-    instruction: str = Form("Analysez ces données d'accès et identifiez: 1) Les anomalies, 2) Les risques potentiels, 3) Les suggestions d'amélioration. Structurez la réponse en JSON en suivant ce schéma : {\"synthese\": \"\", \"anomalies\": [], \"risques\": [], \"recommandations\": [], \"metriques\": {\"score_risque\": 0.0, \"confiance_analyse\": 0.0}}."),
+    instruction: str = Form("Analyze data: identify anomalies, risks, and improvements. Respond in JSON: {\"synthese\": \"\", \"anomalies\": [], \"risques\": [], \"recommandations\": [], \"metriques\": {\"score_risque\": 0.0, \"confiance_analyse\": 0.0}}."),
     app_settings: Settings = Depends(get_settings),
     db: Session = Depends(get_db)
 ):
@@ -173,12 +173,22 @@ async def analyze_file(
         lignes=len(df)
     )
 
-    data_json = df.to_json(orient='records')
+    # Limit the DataFrame rows sent to the AI if it exceeds the maximum allowed
+    df_to_analyze = df.head(app_settings.MAX_AI_INPUT_ROWS)
+    data_json = df_to_analyze.to_json(orient='records')
+
+    if len(df) > app_settings.MAX_AI_INPUT_ROWS:
+        print(f"Warning: File truncated. Only the first {app_settings.MAX_AI_INPUT_ROWS} rows were sent to the AI for analysis.")
 
     
     ai_response_raw = analyze_data_with_openrouter(data_json, app_settings.OPENROUTER_API_KEY, instruction)
     
+    analysis_content = "" # Initialize analysis_content
     try:
+        if 'choices' not in ai_response_raw or not ai_response_raw['choices']:
+            print(f"AI response missing 'choices' key or is empty: {ai_response_raw}") # Log the raw response
+            raise ValueError("AI response missing expected 'choices' data.")
+
         analysis_content = ai_response_raw['choices'][0]['message']['content']
         
         json_start_index = analysis_content.find('{')
