@@ -5,7 +5,7 @@ Voici une refonte ciblée de votre page Analytics qui correspond précisément a
 ## 🕰️ Filtres Actifs
 **Période** : Last 30 days  
 **Cluster** : ABIDJAN (ABJ) |  DAKAR (DKR)
-**Affiliate** : All | OCI | OCD | OCF | OCM | OGN | OGB | OBW | OSL | OSN | OML | OLB | OMG 
+**Affiliate** : All | OCI | OCD | OCF | OCM | OGN | OGB | OBW | OSL | OSN | OML | OLB | OMG
 
 ---
 
