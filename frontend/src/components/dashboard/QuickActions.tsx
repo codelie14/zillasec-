@@ -4,7 +4,7 @@ import { ArrowRight } from 'lucide-react';
 const quickActions = [
     { icon: '📤', label: 'New Analysis', target: '/analyze' },
     { icon: '📊', label: 'Generate Report', target: '/reports' },
-    { icon: '🛡️', label: 'Risk Audit', target: '/risks' },
+    { icon: '🛡️', label: 'Users Lists', target: '/users' },
     { icon: '⚙️', label: 'API Settings', target: '/settings' }
 ];
 
