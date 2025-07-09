@@ -11,7 +11,6 @@ const AIInsights = lazy(() => import('./components/ai-insights/AIInsights').then
 const Reports = lazy(() => import('./components/reports/Reports').then(module => ({ default: module.Reports })));
 const Analytics = lazy(() => import('./components/analytics/Analytics').then(module => ({ default: module.Analytics })));
 const History = lazy(() => import('./components/history/History').then(module => ({ default: module.History })));
-const Alerts = lazy(() => import('./components/alerts/Alerts').then(module => ({ default: module.Alerts })));
 const Templates = lazy(() => import('./components/templates/Templates').then(module => ({ default: module.Templates })));
 const Users = lazy(() => import('./components/users/Users').then(module => ({ default: module.Users })));
 const Settings = lazy(() => import('./components/settings/Settings').then(module => ({ default: module.Settings })));
@@ -45,7 +44,6 @@ function App() {
             <Route path="/reports" element={<Reports />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/history" element={<History />} />
-            <Route path="/alerts" element={<Alerts />} />
             <Route path="/templates" element={<Templates />} />
             <Route path="/users" element={<Users />} />
             <Route path="/settings" element={<Settings />} />

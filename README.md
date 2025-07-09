@@ -71,7 +71,7 @@ Toutes les interactions avec l'IA sont gérées par le backend pour des raisons 
 
 6.  **Lancez le serveur backend :**
     ```bash
-    uvicorn app.main:app --reload --app-dir app
+    uvicorn main:app --reload --app-dir app
     ```
     L'API sera disponible à l'adresse `http://127.0.0.1:8000`.
 

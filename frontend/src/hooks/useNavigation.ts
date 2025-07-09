@@ -6,7 +6,6 @@ export type NavigationPage =
   | 'ai-insights' 
   | 'reports' 
   | 'history' 
-  | 'alerts' 
   | 'users' 
   | 'settings'
   | 'profile'
