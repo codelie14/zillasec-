@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { TrendingUp, Users, UserPlus, Download } from 'lucide-react';
 import { Line, Pie } from 'react-chartjs-2';
+import PptxGenJS from 'pptxgenjs';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -62,6 +63,9 @@ export const Analytics: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
   const [selectedCluster, setSelectedCluster] = useState('all');
   const [selectedAffiliate, setSelectedAffiliate] = useState('all');
+  
+  const pieChartRef = useRef<ChartJS<'pie'>>(null);
+  const lineChartRef = useRef<ChartJS<'line'>>(null);
 
   const handleClusterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedCluster(e.target.value);
@@ -113,12 +117,10 @@ export const Analytics: React.FC = () => {
     let data: number[];
     
     if (selectedAffiliate !== 'all') {
-      // Single affiliate selected: show accounts per domain
       const affiliateData = allAffiliateData.find(d => d.affiliate === selectedAffiliate);
       labels = domains;
       data = affiliateData ? domains.map(domain => affiliateData.domains[domain] || 0) : [];
     } else {
-      // All affiliates: show total active accounts per domain for the selected cluster
       labels = domains;
       data = domains.map(domain => 
         filteredData.reduce((sum, affiliate) => sum + (affiliate.domains[domain] || 0), 0)
@@ -152,6 +154,73 @@ export const Analytics: React.FC = () => {
     }
     return `Comptes actifs par domaine (${selectedCluster})`;
   }, [selectedAffiliate, selectedCluster]);
+
+  const handleGenerateReport = () => {
+    const pptx = new PptxGenJS();
+    pptx.layout = 'LAYOUT_WIDE';
+
+    // Slide 1: Title Slide
+    const titleSlide = pptx.addSlide();
+    titleSlide.addText('Rapport Analytics', { x: 0.5, y: 1.5, fontSize: 36, bold: true, color: '003366' });
+    titleSlide.addText(`Date: ${new Date().toLocaleDateString()}`, { x: 0.5, y: 2.5, fontSize: 18, color: '333333' });
+    const clusterText = selectedCluster === 'all' ? 'Tous les clusters' : selectedCluster;
+    const affiliateText = selectedAffiliate === 'all' ? 'Toutes les affiliates' : selectedAffiliate;
+    titleSlide.addText(`Filtres: ${clusterText}, ${affiliateText}`, { x: 0.5, y: 3.0, fontSize: 14, color: '555555' });
+
+    // Slide 2: Key Metrics & Charts
+    const chartSlide = pptx.addSlide();
+    chartSlide.addText('Indicateurs et Visualisations Clés', { x: 0.5, y: 0.25, fontSize: 24, bold: true, color: '003366' });
+
+    // Key Metrics
+    chartSlide.addText([
+        { text: 'Comptes Totaux: ', options: { bold: true } },
+        { text: keyMetrics.total.value, options: { color: '4e79a7' } }
+    ], { x: 0.5, y: 1.0, fontSize: 18 });
+    chartSlide.addText([
+        { text: 'Comptes Actifs: ', options: { bold: true } },
+        { text: keyMetrics.active.value, options: { color: '4e79a7' } }
+    ], { x: 0.5, y: 1.5, fontSize: 18 });
+     chartSlide.addText([
+        { text: 'Comptes Désactivés: ', options: { bold: true } },
+        { text: keyMetrics.new.value, options: { color: '4e79a7' } }
+    ], { x: 0.5, y: 2.0, fontSize: 18 });
+
+    // Charts
+    const pieChartImg = pieChartRef.current?.toBase64Image();
+    if (pieChartImg) {
+      chartSlide.addImage({ data: pieChartImg, x: 0.5, y: 2.5, w: 5.5, h: 3.0 });
+    }
+    const lineChartImg = lineChartRef.current?.toBase64Image();
+    if (lineChartImg) {
+      chartSlide.addImage({ data: lineChartImg, x: 6.5, y: 2.5, w: 6.0, h: 3.0 });
+    }
+
+    // Slide 3: Details Table
+    const tableSlide = pptx.addSlide();
+    tableSlide.addText('Détails par Affiliate', { x: 0.5, y: 0.25, fontSize: 24, bold: true, color: '003366' });
+    
+    const tableHeaders = ['Affiliate', 'Comptes Total', 'Comptes GNOC', 'Comptes Affiliate', 'Comptes Admin', 'Δ Mois'];
+    const tableRows = filteredData.map(item => [
+      item.affiliate,
+      item.total.toLocaleString(),
+      item.comptesGNOC.toLocaleString(),
+      item.comptesAffiliate.toLocaleString(),
+      item.comptesAdmin.toLocaleString(),
+      item.change
+    ]);
+
+    tableSlide.addTable([tableHeaders, ...tableRows], { 
+        x: 0.5, y: 1.0, w: 12.0, 
+        rowH: 0.4,
+        fill: { color: 'F7F7F7' },
+        border: { type: 'solid', pt: 1, color: 'CCCCCC' },
+        align: 'center',
+        valign: 'middle',
+        fontSize: 10,
+    });
+
+    pptx.writeFile({ fileName: `Analytics_Report_${selectedCluster}_${selectedAffiliate}.pptx` });
+  };
 
   return (
     <div className="space-y-8">
@@ -188,7 +257,10 @@ export const Analytics: React.FC = () => {
             <option value="all">All Affiliates</option>
             {(selectedCluster === 'all' ? allAffiliatesList : affiliatesByCluster[selectedCluster]).map(aff => <option key={aff} value={aff}>{aff}</option>)}
           </select>
-          <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2">
+          <button 
+            onClick={handleGenerateReport}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2"
+          >
             <Download className="h-4 w-4" />
             <span>Générer</span>
           </button>
@@ -207,13 +279,13 @@ export const Analytics: React.FC = () => {
         <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
           <h3 className="text-lg font-semibold mb-4">{pieChartTitle}</h3>
           <div className="h-64 flex items-center justify-center">
-            <Pie data={pieChartData} options={{ responsive: true, maintainAspectRatio: false }} />
+            <Pie ref={pieChartRef} data={pieChartData} options={{ responsive: true, maintainAspectRatio: false }} />
           </div>
         </div>
         <div className="lg:col-span-3 bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
           <h3 className="text-lg font-semibold mb-4">{lineChartTitle}</h3>
           <div className="h-64">
-            <Line data={lineChartData} options={{ responsive: true, maintainAspectRatio: false }} />
+            <Line ref={lineChartRef} data={lineChartData} options={{ responsive: true, maintainAspectRatio: false }} />
           </div>
         </div>
       </div>
