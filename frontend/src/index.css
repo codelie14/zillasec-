@@ -1,3 +1,36 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Dashboard Styles */
+.dashboard-card {
+  border-left: 4px solid transparent;
+  transition: border-color 0.3s ease;
+}
+
+.dashboard-card:hover {
+  border-left-color: #3b82f6; /* blue-500 */
+}
+
+/* Specific cluster colors if needed */
+.cluster-abj {
+  border-left-color: #4e79a7;
+}
+
+.cluster-dkr {
+  border-left-color: #f28e2b;
+}
+
+/* Pulse animation for alerts */
+.alert-badge {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
