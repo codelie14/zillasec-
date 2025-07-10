@@ -3,6 +3,7 @@ import { Route, Routes, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { Layout } from './components/common/Layout';
 import { PageLoader } from './components/common/PageLoader';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import { AnalysisResponse } from './types/analysis';
 
 const Dashboard = lazy(() => import('./components/dashboard/Dashboard').then(module => ({ default: module.Dashboard })));
@@ -30,28 +31,30 @@ function App() {
   return (
     <ThemeProvider>
       <Layout>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route
-              path="/upload"
-              element={<FileUpload onAnalysisComplete={handleAnalysisComplete} />}
-            />
-            <Route
-              path="/ai-insights"
-              element={<AIInsights analysisResult={analysisResult} />}
-            />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/history" element={<History />} />
-            <Route path="/templates" element={<Templates />} />
-            <Route path="/users" element={<Users />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/reports/:id" element={<ReportDetail />} />
-            <Route path="/ai-chat" element={<AIChatPage />} />
-            <Route path="/database" element={<DatabasePage />} />
-          </Routes>
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route
+                path="/upload"
+                element={<FileUpload onAnalysisComplete={handleAnalysisComplete} />}
+              />
+              <Route
+                path="/ai-insights"
+                element={<AIInsights analysisResult={analysisResult} />}
+              />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/history" element={<History />} />
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/users" element={<Users />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/reports/:id" element={<ReportDetail />} />
+              <Route path="/ai-chat" element={<AIChatPage />} />
+              <Route path="/database" element={<DatabasePage />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </Layout>
     </ThemeProvider>
   );

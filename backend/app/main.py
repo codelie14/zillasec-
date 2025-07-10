@@ -3,26 +3,60 @@ import json
 import datetime
 import pandas as pd
 import requests
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form
-from sqlalchemy import func, inspect
+import logging
+from logging.handlers import RotatingFileHandler
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Query, Request
+from fastapi.responses import JSONResponse
+from sqlalchemy import func, inspect, case
+from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Any
-from sqlalchemy.orm import Session
+from typing import List, Dict, Any, Optional
 from fastapi.responses import StreamingResponse
+from datetime import timedelta
 
 from config import Settings, settings
 import models
 from database import engine, get_db
 import report_generator
 
+#<editor-fold desc="Logging Configuration">
+# Ensure logs directory exists
+os.makedirs("C:/ZillaSec/logs", exist_ok=True)
+
+# Backend Logger
+backend_logger = logging.getLogger("backend")
+backend_logger.setLevel(logging.INFO)
+backend_handler = RotatingFileHandler("C:/ZillaSec/logs/backend.log", maxBytes=10485760, backupCount=5)
+backend_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+backend_handler.setFormatter(backend_formatter)
+backend_logger.addHandler(backend_handler)
+
+# Frontend Logger
+frontend_logger = logging.getLogger("frontend")
+frontend_logger.setLevel(logging.INFO)
+frontend_handler = RotatingFileHandler("C:/ZillaSec/logs/frontend.log", maxBytes=10485760, backupCount=5)
+frontend_handler.setFormatter(backend_formatter) # Can use the same formatter
+frontend_logger.addHandler(frontend_handler)
+#</editor-fold>
+
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="ZillaSec AI Backend",
-    description="API for file analysis using Llama 3.3 via OpenRouter.",
-    version="1.0.0",
+    description="API for file analysis and dashboard data.",
+    version="1.1.0",
 )
+
+#<editor-fold desc="Exception Handler">
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    backend_logger.error(f"Unhandled exception for {request.method} {request.url}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred."},
+    )
+#</editor-fold>
 
 # CORS configuration
 origins = [
@@ -38,10 +72,104 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic Models
+#<editor-fold desc="Frontend Logging Endpoint">
+class LogRequest(BaseModel):
+    level: str
+    message: str
+    error: Optional[str] = None
+
+@app.post("/api/log-error")
+async def log_frontend_error(log_request: LogRequest):
+    log_message = f"FE_LOG - {log_request.message}"
+    if log_request.error:
+        log_message += f" | Error: {log_request.error}"
+    
+    if log_request.level == 'error':
+        frontend_logger.error(log_message)
+    elif log_request.level == 'warn':
+        frontend_logger.warning(log_message)
+    else:
+        frontend_logger.info(log_message)
+        
+    return {"status": "logged"}
+#</editor-fold>
+
+#<editor-fold desc="Dashboard Models">
+class SecurityPulseMetric(BaseModel):
+    value: str
+    change: str
+    trend: str
+
+class SecurityPulseData(BaseModel):
+    total_accounts: SecurityPulseMetric
+    active_sessions: SecurityPulseMetric
+    high_risk_accounts: SecurityPulseMetric
+    api_success_rate: SecurityPulseMetric
+
+class ClusterStatusData(BaseModel):
+    labels: List[str]
+    values: List[int]
+
+class CriticalAlert(BaseModel):
+    type: str
+    count: Optional[int] = None
+    location: Optional[str] = None
+    accounts: Optional[List[str]] = None
+    endpoint: Optional[str] = None
+    error_rate: Optional[str] = None
+
+class RecentActivityItem(BaseModel):
+    time: str
+    user: str
+    action: str
+    status: str
+
+class SystemStatusItem(BaseModel):
+    component: str
+    status: int
+
+class DashboardDataResponse(BaseModel):
+    security_pulse: SecurityPulseData
+    cluster_status: ClusterStatusData
+    critical_alerts: List[CriticalAlert]
+    recent_activity: List[RecentActivityItem]
+    system_status: List[SystemStatusItem]
+#</editor-fold>
+
+#<editor-fold desc="Analytics Models">
+class AnalyticsMetric(BaseModel):
+    value: str
+    change: str
+
+class AnalyticsKeyMetrics(BaseModel):
+    total: AnalyticsMetric
+    active: AnalyticsMetric
+    disabled: AnalyticsMetric
+
+class ChartData(BaseModel):
+    labels: List[str]
+    datasets: List[Dict[str, Any]]
+
+class AnalyticsDetailRow(BaseModel):
+    affiliate: str
+    total: int
+    comptesGNOC: int
+    comptesAffiliate: int
+    comptesAdmin: int
+    change: str
+
+class AnalyticsDataResponse(BaseModel):
+    key_metrics: AnalyticsKeyMetrics
+    pie_chart_data: ChartData
+    line_chart_data: ChartData
+    details_table: List[AnalyticsDetailRow]
+    affiliates_list: List[str]
+#</editor-fold>
+
+#<editor-fold desc="Existing API Models">
 class ChatRequest(BaseModel):
     question: str
-    context: str # 'database' or a file_id
+    context: str
     file_id: int | None = None
 
 class ChatResponse(BaseModel):
@@ -117,6 +245,221 @@ class AnalysisResponse(BaseModel):
     
     class Config:
         from_attributes = True
+#</editor-fold>
+
+#<editor-fold desc="New Data Endpoints">
+@app.get("/api/dashboard-data", response_model=DashboardDataResponse)
+def get_dashboard_data(db: Session = Depends(get_db)):
+    try:
+        backend_logger.info("Fetching dashboard data.")
+        # 1. Security Pulse
+        now = datetime.datetime.utcnow()
+        yesterday = now - timedelta(days=1)
+
+        total_accounts = db.query(models.FileData).count()
+        total_accounts_yesterday = db.query(models.FileData).filter(models.FileData.created_at < yesterday).count()
+        
+        active_accounts = db.query(models.FileData).filter(models.FileData.statut.ilike('%active%')).count()
+        active_accounts_yesterday = db.query(models.FileData).filter(models.FileData.created_at < yesterday, models.FileData.statut.ilike('%active%')).count()
+
+        high_risk_accounts = db.query(models.FileData).filter(models.FileData.statut.ilike('%disabled%')).count() # Example logic
+        high_risk_accounts_yesterday = db.query(models.FileData).filter(models.FileData.created_at < yesterday, models.FileData.statut.ilike('%disabled%')).count()
+
+        def get_change_str(current, previous):
+            if previous == 0:
+                return "+∞" if current > 0 else "0"
+            change = current - previous
+            return f"+{change}" if change >= 0 else str(change)
+
+        security_pulse = SecurityPulseData(
+            total_accounts=SecurityPulseMetric(value=f"{total_accounts:,}", change=get_change_str(total_accounts, total_accounts_yesterday), trend="📈"),
+            active_sessions=SecurityPulseMetric(value=f"{active_accounts:,}", change=get_change_str(active_accounts, active_accounts_yesterday), trend="📉"),
+            high_risk_accounts=SecurityPulseMetric(value=f"{high_risk_accounts:,}", change=get_change_str(high_risk_accounts, high_risk_accounts_yesterday), trend="🔴"),
+            api_success_rate=SecurityPulseMetric(value="98.7%", change="+0.8%", trend="✅"), # Static as per design
+        )
+
+        # 2. Cluster Status
+        cluster_data = db.query(models.FileData.cluster, func.count(models.FileData.id)).filter(models.FileData.statut.ilike('%active%')).group_by(models.FileData.cluster).all()
+        cluster_status = ClusterStatusData(
+            labels=[c[0] for c in cluster_data if c[0]],
+            values=[c[1] for c in cluster_data if c[0]]
+        )
+
+        # 3. Critical Alerts (Static as per design)
+        critical_alerts = [
+            CriticalAlert(type="unusual_access", count=12, location="ABJ", accounts=["EMP20345", "EMP21567"]),
+            CriticalAlert(type="api_throttling", endpoint="/analyze", error_rate="4.8%")
+        ]
+
+        # 4. Recent Activity (Partially dynamic from analyses table)
+        recent_analyses = db.query(models.Analysis).order_by(models.Analysis.created_at.desc()).limit(3).all()
+        recent_activity = [
+            RecentActivityItem(
+                time=an.created_at.strftime("%H:%M"), 
+                user="admin", # Assuming admin uploads
+                action="File Upload", 
+                status="✅"
+            ) for an in recent_analyses
+        ]
+        if not recent_activity: # Add placeholder if empty
+            recent_activity = [
+                RecentActivityItem(time="10:23", user="admin", action="File Upload", status="✅"),
+                RecentActivityItem(time="09:45", user="j.doe", action="Risk Review", status="⚠️"),
+            ]
+
+
+        # 5. System Status (Static as per design)
+        system_status = [
+            SystemStatusItem(component="AI Engine", status=100),
+            SystemStatusItem(component="Database", status=95),
+            SystemStatusItem(component="API", status=98)
+        ]
+
+        return DashboardDataResponse(
+            security_pulse=security_pulse,
+            cluster_status=cluster_status,
+            critical_alerts=critical_alerts,
+            recent_activity=recent_activity,
+            system_status=system_status,
+        )
+    except Exception as e:
+        backend_logger.error(f"Error fetching dashboard data: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not fetch dashboard data.")
+
+@app.get("/api/analytics-data", response_model=AnalyticsDataResponse)
+def get_analytics_data(
+    cluster: Optional[str] = Query(None),
+    affiliate: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    try:
+        backend_logger.info(f"Fetching analytics data for cluster '{cluster}' and affiliate '{affiliate}'.")
+        # Base query
+        query = db.query(models.FileData)
+        
+        # Affiliate list for dropdown
+        affiliates_query = db.query(models.FileData.affiliate).distinct()
+
+        # Apply filters
+        if cluster and cluster != 'all':
+            query = query.filter(models.FileData.cluster == cluster)
+            affiliates_query = affiliates_query.filter(models.FileData.cluster == cluster)
+
+        if affiliate and affiliate != 'all':
+            query = query.filter(models.FileData.affiliate == affiliate)
+
+        filtered_data = query.all()
+        
+        affiliates_list = [row[0] for row in affiliates_query.all() if row[0]]
+
+        # 1. Key Metrics
+        total = len(filtered_data)
+        active = sum(1 for d in filtered_data if d.statut and 'active' in d.statut.lower())
+        disabled = sum(1 for d in filtered_data if d.statut and 'disabled' in d.statut.lower())
+        activation_rate = (active / total * 100) if total > 0 else 0
+        
+        key_metrics = AnalyticsKeyMetrics(
+            total=AnalyticsMetric(value=f"{total:,}", change="+3.1%"), # Placeholder change
+            active=AnalyticsMetric(value=f"{active:,} ({activation_rate:.1f}%)", change="+2.4%"),
+            disabled=AnalyticsMetric(value=f"{disabled:,}", change="-1.2%"), # Placeholder
+        )
+
+        # 2. Pie Chart Data
+        if affiliate and affiliate != 'all':
+            # Data for a single selected affiliate
+            affiliate_data = next((d for d in filtered_data if d.affiliate == affiliate), None)
+            if affiliate_data:
+                # Placeholder logic for account types
+                pie_chart_data = ChartData(
+                    labels=['Comptes GNOC', 'Comptes Affiliate', 'Comptes Admin'],
+                    datasets=[{
+                        "data": [total // 2, total // 3, total // 6], # Example distribution
+                        "backgroundColor": ['#4e79a7', '#f28e2b', '#e15759'],
+                    }]
+                )
+            else:
+                pie_chart_data = ChartData(labels=[], datasets=[])
+        else:
+            # Data for all (or cluster-filtered) affiliates
+            affiliate_counts = db.query(
+                models.FileData.affiliate, 
+                func.count(models.FileData.id)
+            ).filter(models.FileData.affiliate.isnot(None))
+            
+            if cluster and cluster != 'all':
+                affiliate_counts = affiliate_counts.filter(models.FileData.cluster == cluster)
+                
+            affiliate_counts = affiliate_counts.group_by(models.FileData.affiliate).order_by(func.count(models.FileData.id).desc()).limit(12).all()
+
+            pie_chart_data = ChartData(
+                labels=[row[0] for row in affiliate_counts],
+                datasets=[{
+                    "data": [row[1] for row in affiliate_counts],
+                    "backgroundColor": ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab', '#86bc42', '#bf5b17'],
+                }]
+            )
+
+        # 3. Line Chart Data (Domains)
+        domain_query = db.query(
+            models.FileData.domaine,
+            func.count(models.FileData.id)
+        ).filter(models.FileData.domaine.isnot(None))
+        
+        if cluster and cluster != 'all':
+            domain_query = domain_query.filter(models.FileData.cluster == cluster)
+        if affiliate and affiliate != 'all':
+            domain_query = domain_query.filter(models.FileData.affiliate == affiliate)
+            
+        domain_counts = domain_query.group_by(models.FileData.domaine).all()
+        
+        line_chart_data = ChartData(
+            labels=[row[0] for row in domain_counts],
+            datasets=[{
+                "label": 'Comptes Actifs par Domaine',
+                "data": [row[1] for row in domain_counts],
+                "borderColor": '#4e79a7',
+                "backgroundColor": 'rgba(78, 121, 167, 0.1)',
+                "fill": True,
+                "tension": 0.3,
+            }]
+        )
+
+        # 4. Details Table
+        table_query = db.query(
+            models.FileData.affiliate,
+            func.count(models.FileData.id).label("total"),
+            func.sum(case((models.FileData.domaine == 'IN', 1), else_=0)).label("gnoc"), # Example logic
+            func.sum(case((models.FileData.domaine == 'CS', 1), else_=0)).label("affiliate"), # Example logic
+            func.sum(case((models.FileData.domaine == 'PS', 1), else_=0)).label("admin") # Example logic
+        ).filter(models.FileData.affiliate.isnot(None))
+
+        if cluster and cluster != 'all':
+            table_query = table_query.filter(models.FileData.cluster == cluster)
+        
+        table_data = table_query.group_by(models.FileData.affiliate).all()
+
+        details_table = [
+            AnalyticsDetailRow(
+                affiliate=row.affiliate,
+                total=row.total,
+                comptesGNOC=row.gnoc,
+                comptesAffiliate=row.affiliate,
+                comptesAdmin=row.admin,
+                change="+1.0%" # Placeholder
+            ) for row in table_data
+        ]
+
+        return AnalyticsDataResponse(
+            key_metrics=key_metrics,
+            pie_chart_data=pie_chart_data,
+            line_chart_data=line_chart_data,
+            details_table=details_table,
+            affiliates_list=affiliates_list,
+        )
+    except Exception as e:
+        backend_logger.error(f"Error fetching analytics data: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not fetch analytics data.")
+#</editor-fold>
 
 # Dependency to get settings
 def get_settings() -> Settings:
@@ -125,6 +468,7 @@ def get_settings() -> Settings:
 # OpenRouter API call function
 def analyze_data_with_openrouter(data_json: str, api_key: str, instruction: str) -> Dict[str, Any]:
     if not api_key or api_key == "remplacez-moi-par-votre-vraie-cle":
+        backend_logger.error("OpenRouter API key is not configured.")
         raise HTTPException(status_code=500, detail="OpenRouter API key not configured.")
 
     try:
@@ -144,6 +488,7 @@ def analyze_data_with_openrouter(data_json: str, api_key: str, instruction: str)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
+        backend_logger.error(f"Error calling OpenRouter API: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error calling OpenRouter API: {e}")
 
 @app.post("/analyze/", response_model=AnalysisResponse)
@@ -153,8 +498,10 @@ async def analyze_file(
     app_settings: Settings = Depends(get_settings),
     db: Session = Depends(get_db)
 ):
+    backend_logger.info(f"Starting file analysis for {file.filename}")
     file_extension = file.filename.split('.')[-1].lower()
     if file_extension not in ['xlsx', 'xls', 'csv']:
+        backend_logger.warning(f"Invalid file type uploaded: {file_extension}")
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload an Excel or CSV file.")
 
     try:
@@ -163,6 +510,7 @@ async def analyze_file(
         else:
             df = pd.read_excel(file.file)
     except Exception as e:
+        backend_logger.error(f"Error reading uploaded file {file.filename}: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Error reading file: {e}")
 
     file_details = FileDetails(
@@ -178,7 +526,7 @@ async def analyze_file(
     data_json = df_to_analyze.to_json(orient='records')
 
     if len(df) > app_settings.MAX_AI_INPUT_ROWS:
-        print(f"Warning: File truncated. Only the first {app_settings.MAX_AI_INPUT_ROWS} rows were sent to the AI for analysis.")
+        backend_logger.warning(f"File {file.filename} truncated. Only the first {app_settings.MAX_AI_INPUT_ROWS} rows were sent to the AI for analysis.")
 
     
     ai_response_raw = analyze_data_with_openrouter(data_json, app_settings.OPENROUTER_API_KEY, instruction)
@@ -186,7 +534,7 @@ async def analyze_file(
     analysis_content = "" # Initialize analysis_content
     try:
         if 'choices' not in ai_response_raw or not ai_response_raw['choices']:
-            print(f"AI response missing 'choices' key or is empty: {ai_response_raw}") # Log the raw response
+            backend_logger.error(f"AI response missing 'choices' key or is empty: {ai_response_raw}")
             raise ValueError("AI response missing expected 'choices' data.")
 
         analysis_content = ai_response_raw['choices'][0]['message']['content']
@@ -205,6 +553,7 @@ async def analyze_file(
         # Validate with the new Pydantic model
         analysis_result = CustomAnalysisResult(**analysis_result_data)
     except (KeyError, IndexError, json.JSONDecodeError, ValueError) as e:
+        backend_logger.error(f"Could not parse or validate AI response: {e} - Raw content was: {analysis_content}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Could not parse or validate AI response: {e} - Raw content was: {analysis_content}")
 
     # Save to DB
@@ -219,6 +568,7 @@ async def analyze_file(
     db.add(db_analysis)
     db.commit()
     db.refresh(db_analysis)
+    backend_logger.info(f"Saved analysis for {file.filename} with ID {db_analysis.id}")
 
     # Save file data to the new table
     try:
@@ -238,8 +588,10 @@ async def analyze_file(
             )
             db.add(file_data)
         db.commit()
+        backend_logger.info(f"Successfully saved {len(df)} rows from {file.filename} to file_data table.")
     except Exception as e:
         db.rollback()
+        backend_logger.error(f"Error saving file data to database for analysis ID {db_analysis.id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error saving file data to database: {e}")
 
     return AnalysisResponse(
@@ -311,26 +663,30 @@ def download_report(analysis_id: int, format: str, db: Session = Depends(get_db)
     if analysis is None:
         raise HTTPException(status_code=404, detail="Analysis not found")
 
-    if format == "pdf":
-        report_buffer = report_generator.create_pdf_report(analysis)
-        media_type = "application/pdf"
-        filename = f"report_{analysis_id}.pdf"
-    elif format == "excel":
-        report_buffer = report_generator.create_excel_report(analysis)
-        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        filename = f"report_{analysis_id}.xlsx"
-    elif format == "pptx":
-        report_buffer = report_generator.create_pptx_report(analysis)
-        media_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        filename = f"report_{analysis_id}.pptx"
-    else:
-        raise HTTPException(status_code=400, detail="Invalid format specified")
+    try:
+        if format == "pdf":
+            report_buffer = report_generator.create_pdf_report(analysis)
+            media_type = "application/pdf"
+            filename = f"report_{analysis_id}.pdf"
+        elif format == "excel":
+            report_buffer = report_generator.create_excel_report(analysis)
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            filename = f"report_{analysis_id}.xlsx"
+        elif format == "pptx":
+            report_buffer = report_generator.create_pptx_report(analysis)
+            media_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            filename = f"report_{analysis_id}.pptx"
+        else:
+            raise HTTPException(status_code=400, detail="Invalid format specified")
 
-    return StreamingResponse(
-        iter([report_buffer.getvalue()]),
-        media_type=media_type,
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
+        return StreamingResponse(
+            iter([report_buffer.getvalue()]),
+            media_type=media_type,
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        backend_logger.error(f"Error generating report for analysis ID {analysis_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generating report")
 
 @app.get("/")
 def read_root():
@@ -342,38 +698,45 @@ async def chat_with_ai(
     app_settings: Settings = Depends(get_settings),
     db: Session = Depends(get_db)
 ):
-    if request.context == 'database':
-        # This is a simplified example. A real implementation would
-        # fetch relevant data from the DB based on the question.
-        all_analyses = db.query(models.Analysis).limit(10).all()
-        context_data = json.dumps([r.__dict__ for r in all_analyses], default=str)
-        instruction = f"En vous basant sur ces données d'analyse de la base de données, répondez à la question suivante : {request.question}"
-    elif request.context == 'file' and request.file_id:
-        analysis = db.query(models.Analysis).filter(models.Analysis.id == request.file_id).first()
-        if not analysis:
-            raise HTTPException(status_code=404, detail="Analysis file not found")
-        context_data = json.dumps(analysis.__dict__, default=str)
-        instruction = f"En vous basant sur les données de ce fichier d'analyse, répondez à la question suivante : {request.question}"
-    else:
-        raise HTTPException(status_code=400, detail="Invalid chat context or missing file_id")
-
-    ai_response_raw = analyze_data_with_openrouter(context_data, app_settings.OPENROUTER_API_KEY, instruction)
-    
     try:
-        answer = ai_response_raw['choices'][0]['message']['content']
-    except (KeyError, IndexError):
-        raise HTTPException(status_code=500, detail="Could not parse AI response")
+        if request.context == 'database':
+            # This is a simplified example. A real implementation would
+            # fetch relevant data from the DB based on the question.
+            all_analyses = db.query(models.Analysis).limit(10).all()
+            context_data = json.dumps([r.__dict__ for r in all_analyses], default=str)
+            instruction = f"En vous basant sur ces données d'analyse de la base de données, répondez à la question suivante : {request.question}"
+        elif request.context == 'file' and request.file_id:
+            analysis = db.query(models.Analysis).filter(models.Analysis.id == request.file_id).first()
+            if not analysis:
+                raise HTTPException(status_code=404, detail="Analysis file not found")
+            context_data = json.dumps(analysis.__dict__, default=str)
+            instruction = f"En vous basant sur les données de ce fichier d'analyse, répondez à la question suivante : {request.question}"
+        else:
+            raise HTTPException(status_code=400, detail="Invalid chat context or missing file_id")
 
-    db_conversation = models.Conversation(
-        question=request.question,
-        answer=answer,
-        context=request.context,
-        file_id=request.file_id
-    )
-    db.add(db_conversation)
-    db.commit()
+        ai_response_raw = analyze_data_with_openrouter(context_data, app_settings.OPENROUTER_API_KEY, instruction)
+        
+        try:
+            answer = ai_response_raw['choices'][0]['message']['content']
+        except (KeyError, IndexError):
+            backend_logger.error(f"Could not parse AI response for chat: {ai_response_raw}")
+            raise HTTPException(status_code=500, detail="Could not parse AI response")
 
-    return ChatResponse(answer=answer)
+        db_conversation = models.Conversation(
+            question=request.question,
+            answer=answer,
+            context=request.context,
+            file_id=request.file_id
+        )
+        db.add(db_conversation)
+        db.commit()
+
+        return ChatResponse(answer=answer)
+    except HTTPException:
+        raise # Re-raise HTTPException so FastAPI handles it
+    except Exception as e:
+        backend_logger.error(f"Error in chat endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An error occurred in the chat endpoint.")
 
 @app.get("/conversations/", response_model=List[Conversation])
 def get_conversations(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
@@ -531,6 +894,7 @@ def get_table_content(table_name: str, db: Session = Depends(get_db)):
         df = pd.read_sql_table(table_name, db.bind)
         return df.to_dict(orient='records')
     except Exception as e:
+        backend_logger.error(f"Error reading table {table_name}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error reading table: {e}")
 
 @app.delete("/database/tables/{table_name}/clear")
@@ -543,9 +907,11 @@ def clear_table(table_name: str, db: Session = Depends(get_db)):
         table = models.Base.metadata.tables[table_name]
         db.execute(table.delete())
         db.commit()
+        backend_logger.info(f"Table {table_name} cleared successfully.")
         return {"message": f"Table {table_name} cleared successfully."}
     except Exception as e:
         db.rollback()
+        backend_logger.error(f"Error clearing table {table_name}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error clearing table: {e}")
 
 @app.delete("/database/tables/{table_name}/rows")
@@ -568,7 +934,9 @@ def delete_table_row(table_name: str, row: Dict[str, Any], db: Session = Depends
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Row not found or could not be deleted.")
 
+        backend_logger.info(f"Row deleted successfully from {table_name}.")
         return {"message": f"Row deleted successfully from {table_name}."}
     except Exception as e:
         db.rollback()
+        backend_logger.error(f"Error deleting row from {table_name}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error deleting row: {e}")
