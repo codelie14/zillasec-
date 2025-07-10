@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Boolean
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Boolean, Text
 from database import Base
 
 class Analysis(Base):
@@ -44,7 +44,7 @@ class Template(Base):
     description = Column(String(255))
     category = Column(String(255))
     type = Column(String(255))
-    content = Column(String(255))
+    content = Column(Text)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     last_used = Column(DateTime)
     usage_count = Column(Integer, default=0)
