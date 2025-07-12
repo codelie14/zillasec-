@@ -1,6 +1,25 @@
-import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Boolean, Text
+from sqlalchemy import Column, Integer, String, DateTime, JSON, Text, Boolean
 from database import Base
+import datetime
+
+class GnocData(Base):
+    __tablename__ = "gnocdata"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cuid = Column(String(10), unique=True, index=True, nullable=False)
+    id_huawei = Column(String(20))
+    nom = Column(String(50))
+    prenom = Column(String(50))
+    mail_huawei = Column(String(100))
+    mail_orange = Column(String(100))
+    telephone = Column(String(20))
+    perimeter = Column(String(20))
+    affiliate = Column(String(10))
+    statut = Column(String(10))
+    cluster = Column(String(10))
+    domaine = Column(String(20))
+    plateforme = Column(String(20))
+    last_updated = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 class Analysis(Base):
     __tablename__ = "analyses"

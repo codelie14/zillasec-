@@ -4,6 +4,7 @@ import datetime
 import pandas as pd
 import requests
 import logging
+import io
 from logging.handlers import RotatingFileHandler
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Query, Request
 from fastapi.responses import JSONResponse
@@ -27,7 +28,7 @@ os.makedirs("C:/ZillaSec/logs", exist_ok=True)
 # Backend Logger
 backend_logger = logging.getLogger("backend")
 backend_logger.setLevel(logging.INFO)
-backend_handler = RotatingFileHandler("C:/ZillaSec/logs/backend.log", maxBytes=10485760, backupCount=5)
+backend_handler = RotatingFileHandler("C:/ZillaSec/logs/backend.log", maxBytes=10485760, backupCount=5, encoding='utf-8')
 backend_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 backend_handler.setFormatter(backend_formatter)
 backend_logger.addHandler(backend_handler)
@@ -71,6 +72,230 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+#<editor-fold desc="User Management Endpoints">
+
+class User(BaseModel):
+    id: int
+    nom: Optional[str] = None
+    prenom: Optional[str] = None
+    cuid: Optional[str] = None
+    statut: Optional[str] = None
+    domaine: Optional[str] = None
+    cluster: Optional[str] = None
+    affiliate: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+@app.get("/api/users", response_model=List[User])
+def get_users(
+    db: Session = Depends(get_db),
+    skip: int = 0,
+    limit: int = 50,
+    search: Optional[str] = Query(None),
+    status: Optional[List[str]] = Query(None),
+    cluster: Optional[List[str]] = Query(None),
+    domain: Optional[List[str]] = Query(None),
+    affiliate: Optional[List[str]] = Query(None),
+):
+    query = db.query(models.GnocData)
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            models.GnocData.nom.ilike(search_term) |
+            models.GnocData.prenom.ilike(search_term) |
+            models.GnocData.cuid.ilike(search_term) |
+            models.GnocData.mail_huawei.ilike(search_term) |
+            models.GnocData.mail_orange.ilike(search_term)
+        )
+    
+    if status:
+        query = query.filter(models.GnocData.statut.in_(status))
+    if cluster:
+        query = query.filter(models.GnocData.cluster.in_(cluster))
+    if domain:
+        query = query.filter(models.GnocData.domaine.in_(domain))
+    if affiliate:
+        query = query.filter(models.GnocData.affiliate.in_(affiliate))
+
+    users = query.offset(skip).limit(limit).all()
+    return users
+
+@app.post("/api/users/import")
+async def import_users(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    file_extension = file.filename.split('.')[-1].lower()
+    if file_extension not in ['xlsx', 'csv']:
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload an Excel or CSV file.")
+
+    try:
+        if file_extension == 'csv':
+            df = pd.read_csv(file.file)
+        else:
+            df = pd.read_excel(file.file)
+        
+        backend_logger.info(f"Importing file '{file.filename}'. Original columns: {df.columns.tolist()}")
+
+        # Renommer les colonnes pour correspondre au modèle GnocData
+        column_mapping = {
+            'CUID': 'cuid', 'Id Huawei': 'id_huawei', 'Nom': 'nom', 'Prenom': 'prenom',
+            'Mail Huawei': 'mail_huawei', 'Mail Orange': 'mail_orange', 'Numero de Telephone': 'telephone',
+            'Perimeter': 'perimeter', 'Affiliate': 'affiliate', 'Statut': 'statut',
+            'Cluster': 'cluster', 'Domaine': 'domaine', 'Plateforme': 'plateforme'
+        }
+        df = df.rename(columns=column_mapping)
+        backend_logger.info(f"Columns after rename: {df.columns.tolist()}")
+
+        # Clean CUIDs in DataFrame and deduplicate
+        if 'cuid' in df.columns:
+            backend_logger.info(f"Rows before deduplication: {len(df)}")
+            df['cuid'] = df['cuid'].astype(str).str.strip()
+            df.drop_duplicates(subset='cuid', keep='last', inplace=True)
+            backend_logger.info(f"Rows after deduplication: {len(df)}")
+        else:
+            backend_logger.warning("No 'cuid' column found after renaming. Cannot process file.")
+            raise HTTPException(status_code=400, detail="File must contain a 'CUID' column.")
+
+        # Replace NaN with None for database compatibility
+        df = df.replace({pd.NA: None, pd.NaT: None, float('nan'): None})
+
+        # Garder uniquement les colonnes qui existent dans le modèle
+        model_columns = [c.name for c in models.GnocData.__table__.columns]
+        df = df[[col for col in df.columns if col in model_columns]]
+        
+        # Data validation and separation
+        data_to_insert = df.to_dict(orient='records')
+        
+        # Get all existing CUIDs from the database, also cleaned
+        existing_cuids = {c[0].strip() for c in db.query(models.GnocData.cuid).all()}
+        
+        new_users = []
+        users_to_update = []
+
+        for record in data_to_insert:
+            cuid = record.get('cuid')
+            if cuid:
+                if cuid in existing_cuids:
+                    users_to_update.append(record)
+                else:
+                    new_users.append(record)
+        
+        backend_logger.info(f"Found {len(new_users)} new users and {len(users_to_update)} users to update.")
+
+        # Bulk insert for new users
+        if new_users:
+            db.bulk_insert_mappings(models.GnocData, new_users)
+            backend_logger.info(f"Bulk inserted {len(new_users)} new users.")
+        
+        # Bulk update for existing users
+        if users_to_update:
+            for user_data in users_to_update:
+                db.query(models.GnocData).filter(models.GnocData.cuid == user_data['cuid']).update(user_data)
+            backend_logger.info(f"Updated {len(users_to_update)} existing users.")
+
+        db.commit()
+        return {"message": f"{len(new_users)} users created, {len(users_to_update)} users updated."}
+
+    except Exception as e:
+        db.rollback()
+        backend_logger.error(f"Error importing user data: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error processing file: {e}")
+
+@app.get("/api/users/export")
+def export_users(db: Session = Depends(get_db)):
+    try:
+        users = db.query(models.GnocData).all()
+        if not users:
+            raise HTTPException(status_code=404, detail="No users to export.")
+            
+        df = pd.DataFrame([user.__dict__ for user in users])
+        # Nettoyer le dataframe pour l'export
+        df = df.drop(columns=['_sa_instance_state', 'id'])
+
+        output = io.StringIO()
+        df.to_csv(output, index=False)
+        output.seek(0)
+
+        return StreamingResponse(
+            output,
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=users_export_{datetime.datetime.now().strftime('%Y%m%d')}.csv"}
+        )
+    except Exception as e:
+        backend_logger.error(f"Error exporting user data: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error exporting data: {e}")
+
+class UserUpdate(BaseModel):
+    nom: Optional[str] = None
+    prenom: Optional[str] = None
+    id_huawei: Optional[str] = None
+    cuid: Optional[str] = None
+    mail_huawei: Optional[str] = None
+    mail_orange: Optional[str] = None
+    telephone: Optional[str] = None
+    perimeter: Optional[str] = None
+    affiliate: Optional[str] = None
+    statut: Optional[str] = None
+    cluster: Optional[str] = None
+    domaine: Optional[str] = None
+    plateforme: Optional[str] = None
+
+@app.put("/api/users/{user_id}", response_model=User)
+def update_user(user_id: int, user_update: UserUpdate, db: Session = Depends(get_db)):
+    db_user = db.query(models.GnocData).filter(models.GnocData.id == user_id).first()
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    update_data = user_update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_user, key, value)
+    
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@app.delete("/api/users/{user_id}", status_code=204)
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    db_user = db.query(models.GnocData).filter(models.GnocData.id == user_id).first()
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    db.delete(db_user)
+    db.commit()
+    return {"ok": True}
+
+@app.delete("/api/gnocdata/clear", status_code=204)
+def clear_gnocdata_table(db: Session = Depends(get_db)):
+    try:
+        num_rows_deleted = db.query(models.GnocData).delete()
+        db.commit()
+        backend_logger.info(f"GnocData table cleared successfully. {num_rows_deleted} rows deleted.")
+        return {"message": f"Table cleared successfully. {num_rows_deleted} rows deleted."}
+    except Exception as e:
+        db.rollback()
+        backend_logger.error(f"Error clearing GnocData table: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error clearing table.")
+
+class BulkDeleteRequest(BaseModel):
+    ids: List[int]
+
+@app.post("/api/gnocdata/bulk-delete", status_code=204)
+def bulk_delete_users(request: BulkDeleteRequest, db: Session = Depends(get_db)):
+    if not request.ids:
+        raise HTTPException(status_code=400, detail="No user IDs provided.")
+    
+    try:
+        db.query(models.GnocData).filter(models.GnocData.id.in_(request.ids)).delete(synchronize_session=False)
+        db.commit()
+        backend_logger.info(f"Successfully deleted {len(request.ids)} users.")
+        return {"message": "Users deleted successfully."}
+    except Exception as e:
+        db.rollback()
+        backend_logger.error(f"Error during bulk delete: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error during bulk delete.")
+
+#</editor-fold>
 
 #<editor-fold desc="Frontend Logging Endpoint">
 class LogRequest(BaseModel):
@@ -494,7 +719,7 @@ def analyze_data_with_openrouter(data_json: str, api_key: str, instruction: str)
 @app.post("/analyze/", response_model=AnalysisResponse)
 async def analyze_file(
     file: UploadFile = File(...),
-    instruction: str = Form("Analyze data: identify anomalies, risks, and improvements. Respond in JSON: {\"synthese\": \"\", \"anomalies\": [], \"risques\": [], \"recommandations\": [], \"metriques\": {\"score_risque\": 0.0, \"confiance_analyse\": 0.0}}."),
+    instruction: str = Form("Analyze data: identify anomalies, risks, and improvements. Respond in valid, RFC 8259 compliant JSON ONLY. Do NOT include comments or any other text outside the JSON structure. The JSON should be: {\"synthese\": \"\", \"anomalies\": [], \"risques\": [], \"recommandations\": [], \"metriques\": {\"score_risque\": 0.0, \"confiance_analyse\": 0.0}}."),
     app_settings: Settings = Depends(get_settings),
     db: Session = Depends(get_db)
 ):
@@ -539,15 +764,23 @@ async def analyze_file(
 
         analysis_content = ai_response_raw['choices'][0]['message']['content']
         
-        json_start_index = analysis_content.find('{')
-        if json_start_index == -1:
-            raise ValueError("No JSON object found in the AI response.")
-            
-        json_end_index = analysis_content.rfind('}') + 1
-        if json_end_index == 0:
-             raise ValueError("No JSON object found in the AI response.")
+        # Clean the AI response to extract only the JSON part.
+        # It handles responses wrapped in ```json ... ```.
+        json_string = analysis_content.strip()
+        if json_string.startswith("```json"):
+            json_string = json_string[7:] # Remove ```json
+        if json_string.endswith("```"):
+            json_string = json_string[:-3] # Remove ```
+        json_string = json_string.strip()
 
-        json_string = analysis_content[json_start_index:json_end_index]
+        # Find the start and end of the JSON object
+        json_start_index = json_string.find('{')
+        json_end_index = json_string.rfind('}') + 1
+
+        if json_start_index == -1 or json_end_index == 0:
+            raise ValueError("No valid JSON object found in the AI response after cleaning.")
+
+        json_string = json_string[json_start_index:json_end_index]
         
         analysis_result_data = json.loads(json_string)
         # Validate with the new Pydantic model
