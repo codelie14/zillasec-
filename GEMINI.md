@@ -1,144 +1,135 @@
-Voici la refonte complète de votre page **User Data Management** avec les fonctionnalités demandées :
+Cluster = ["ABIDJAN(ABJ)", "DAKAR(DKR)"]
 
-```markdown
-# 📊 User Data Management
+affiliates (ABJ) = ["OCI", "OCD", "OCM", "OGN", "OSL", "OLB"]
 
-# Connexion à la base GNOCDATA
-Nous allons créer une nouvelle table appelé GNOCDATA.
+affiliates (DKR) = ["OCF", "OGB", "OBW", "OSN", "OML", "OMG"]
 
-## 🔍 Search & Filters
-```javascript
-// Filtres avancés
-const filters = {
-  search: '', // Nom, CUID ou email
-  status: ['Actif', 'Désactivé'],
-  cluster: ['ABJ', 'DKR'],
-  domain: ['IN', 'VAS', 'Security'],
-  affiliate: ['OCI', 'OCD', 'OCF']
-}
-```
+Domaines = ["IN", "VAS", "PS", "IP", "TRANS", "RAN", "CLOUD", " DIGITAL"]
 
-## 📋 User Table (Avec pagination)
-| Nom & Prénom | CUID | Statut | Domaine | Cluster | Affiliate | Actions |
-|--------------|------|--------|---------|---------|-----------|---------|
-| Jean Martin | CUID78912 | Actif | Cloud | ABJ | OCD | 🖊️ ✂️ 🗑️ |
-| Sophie Dubois | CUID45623 | Désactivé | Security | DKR | OCI | 🖊️ ✂️ |
+    
+### **Architecture des Plateformes par Domaine**  
+*(Basé sur PLATEFORME_DOMAINES.xlsx)*  
 
-*50 utilisateurs affichés sur 2 847 - Page 1/57*
-
-Aussi, dans le tableau affichant la liste des user, on doit pourvoir obtenir tout les détails sur les users en cliquant dessus.
-
-## 📥 Import/Export Tools
-
-### 1. Importer des Utilisateurs
-```html
-<div class="import-box">
-  <input type="file" accept=".xlsx,.csv" id="userImport">
-  <button onclick="validateImport()">Valider</button>
-  <a href="/templates/user_template.csv" download>📥 Template CSV</a>
-</div>
-
-<!-- Validation côté client -->
-<script>
-function validateImport(file) {
-  const requiredFields = ['CUID', 'Nom', 'Prenom', 'Statut'];
-  // Vérification des en-têtes...
-}
-</script>
-```
-
-### 2. Exporter les Données
-```javascript
-// Options d'export
-const exportOptions = {
-  format: 'xlsx', // ou csv
-  scope: 'filtered', // 'all' ou 'selected'
-  fields: ['CUID', 'Nom', 'Prenom', 'Statut', 'Cluster']
-}
-```
-
-## ⚙️ Actions Disponibles
-| Icône | Action | Description | API Endpoint |
-|-------|--------|-------------|--------------|
-| 🖊️ | Éditer | Modifier un utilisateur | `PATCH /users/{cuid}` |
-| ✂️ | Désactiver | Changer le statut | `POST /users/{cuid}/deactivate` |
-| 🗑️ | Supprimer | Archiver l'utilisateur | `DELETE /users/{cuid}` |
-| ↻ | Synchroniser | Mise à jour depuis GNOC | `POST /sync/gnoc` |
-
-## 🔄 Workflow d'Importation
-1. **Téléversement** : Fichier XLSX/CSV
-2. **Prévisualisation** : Validation des données
-3. **Mapping** : Associer les colonnes
-4. **Confirmation** : Résumé des modifications
-5. **Exécution** : Import dans GNOCDATABASE
-
-## 🛡️ Validation des Données
 ```python
-# Exemple de validation serveur
-def validate_user_data(row):
-    required = ['CUID', 'Nom', 'Prenom', 'Statut']
-    if not all(row.get(field) for field in required):
-        raise ValueError(f"Champs manquants dans la ligne {row}")
-    if not re.match(r'^CUID\d{5}$', row['CUID']):
-        raise ValueError("Format CUID invalide")
-```
+plateformes_par_domaine = {
 
-## 💾 Structure GNOCDATABASE
-```sql
-CREATE TABLE users (
-    cuid VARCHAR(10) PRIMARY KEY,
-    id_huawei VARCHAR(20),
-    nom VARCHAR(50),
-    prenom VARCHAR(50),
-    mail_huawei VARCHAR(100),
-    mail_orange VARCHAR(100),
-    telephone VARCHAR(20),
-    perimeter VARCHAR(20),
-    affiliate VARCHAR(10),
-    statut VARCHAR(10),
-    cluster VARCHAR(10),
-    domaine VARCHAR(20),
-    plateforme VARCHAR(20),
-    last_updated DATETIME
-);
-```
-
-## 🎨 UI Improvements
-```css
-/* Style des boutons d'action */
-.action-btn {
-  transition: all 0.3s;
-}
-.action-btn:hover {
-  transform: scale(1.2);
-}
-
-/* Highlight des comptes désactivés */
-tr.inactive {
-  background-color: #fff0f0;
+    "IN": [
+        "ZSMART", "ZMC", "STATTOOL", 
+        "DC OSG ElasticNET (supervision)",
+        "WT CEPH(admin)", "PCRF",
+        "COMPTE SUDO SERVEUR DE REBOND"
+    ],
+    "TRANS": [
+        "NMS 1353", "NMS 1354", "NFM-P",
+        "NCE-TX&IP", "3SR", "netnumen",
+        "NFMT / Liquid", "NCE MW"
+    ],
+    "RAN": [
+        "NETACT", "U2020 RAN", "PRS",
+        "ORION", "ELASTICNET"
+    ],
+    "IP": [
+        "AMS", "NCE", "CACTI"
+    ],
+    "VAS": [
+        "OMA USSD Cellcube", "System USSD (Acces root)",
+        "MMG (Smsc Gateway)", "VMS", "I2000 (Smsc)"
+    ],
+    "PS": [
+        "U2020", "USN", "DNS WEB",
+        "Firewall SRX", "Bluecat", "PGW"
+    ],
+    "CLOUD": [
+        "OpenStack", "Esight", "Fusion Sphere"
+    ],
+    "DIGITAL": [
+        "ENM", "OSS-RC"
+    ]
 }
 ```
 
 ---
 
-### 🔗 Endpoints API Clés
-- `GET /users` - Lister les utilisateurs (avec filtres)
-- `POST /users/import` - Importer un fichier
-- `GET /users/export` - Exporter les données
-- `POST /sync/gnoc` - Synchronisation complète
-
-### 📱 Responsive Design
+### **Mapping Complet des Filtres**  
 ```javascript
-// Adaptation mobile
-if (screen.width < 768px) {
-  hideColumns(['Affiliate', 'Domaine']);
-  enableHorizontalScroll();
+// Configuration des filtres hiérarchiques
+const filterHierarchy = {
+  clusters: [
+    { 
+      id: "ABJ", 
+      name: "ABIDJAN(ABJ)",
+      affiliates: ["OCI", "OCD", "OCM", "OGN", "OSL", "OLB"],
+      domaines: ["IN", "TRANS", "RAN", "IP", "VAS", "PS", "CLOUD", "DIGITAL"]
+    },
+    {
+      id: "DKR",
+      name: "DAKAR(DKR)", 
+      affiliates: ["OCF", "OGB", "OBW", "OSN", "OML", "OMG"],
+      domaines: ["IN", "TRANS", "RAN", "IP", "VAS", "PS", "CLOUD", "DIGITAL"]
+    }
+  ]
 }
 ```
 
-**Fonctionnalités implémentées** :
-1. Connexion directe à GNOCDATA
-2. Import/Export avec validation
-3. Actions CRUD complètes
-4. Synchronisation bidirectionnelle
-5. Interface adaptative
+---
+
+### **Workflow d'Intégration**  
+1. **Chargement initial** :  
+   ```sql
+   SELECT DISTINCT domaine FROM plateformes 
+   WHERE cluster = ? ORDER BY domaine;
+   ```
+
+2. **Filtrage dynamique** :  
+   ```javascript
+   // Exemple React
+   const [plateformes, setPlateformes] = useState([]);
+   
+   useEffect(() => {
+     if (domaine) {
+       setPlateformes(plateformes_par_domaine[domaine] || []);
+     }
+   }, [domaine]);
+   ```
+
+3. **Validation backend** :  
+   ```python
+   # API endpoint
+   @app.get("/api/plateformes")
+   def get_plateformes(domaine: str):
+       return plateformes_par_domaine.get(domaine, [])
+   ```
+
+---
+
+### **Bonnes Pratiques**  
+1. **Normalisation** :  
+   - Uniformiser les noms (ex: `"ELASTICNET"` → `"ElasticNet"`)  
+   - Supprimer les doublons (ex: `PRS` présent 2x dans `RAN`)  
+
+2. **Documentation** :  
+   ```markdown
+   | Domaine | Plateformes Critiques          |
+   |---------|-------------------------------|
+   | IN      | ZSMART, WT CEPH(admin)        |
+   | TRANS   | NFM-P, NCE-TX&IP              |
+   ```
+
+3. **Sécurité** :  
+   - Taguer les accès admin (`"(admin)"` dans le nom → `is_admin: true`)  
+
+---
+
+### **Exemple de Sortie UI**  
+```json
+{
+  "selectedCluster": "ABJ",
+  "selectedAffiliate": "OCI",
+  "selectedDomaine": "IN",
+  "availablePlateformes": [
+    "ZSMART", 
+    "ZMC",
+    "STATTOOL"
+  ]
+}
+```
