@@ -37,8 +37,8 @@ const useDebounce = (value: string, delay: number) => {
 
 // Options pour les filtres
 const FILTER_OPTIONS = {
-    domain: ['IN', 'VAS', 'Security', 'Cloud', 'Digital'],
-    cluster: ['ABJ', 'DKR', 'OCD', 'OCI', 'OCF'],
+    domain: ["IN", "TRANS", "RAN", "IP", "VAS", "PS", "CLOUD", "CS", "DIGITAL"],
+    cluster: ['ABJ', 'DKR'],
     status: ['Actif', 'Désactivé'],
     perPage: [10, 30, 50, 100, 200]
 };
@@ -292,6 +292,7 @@ export const Users: React.FC = () => {
                     <th className="px-6 py-4 text-left text-sm font-medium text-slate-900 dark:text-white">Nom & Prénom</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-slate-900 dark:text-white">CUID</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-slate-900 dark:text-white">Statut</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-slate-900 dark:text-white">Mail Huawei</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-slate-900 dark:text-white">Domaine</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-slate-900 dark:text-white">Cluster</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-slate-900 dark:text-white">Affiliate</th>
@@ -306,6 +307,7 @@ export const Users: React.FC = () => {
                         <td className="px-6 py-4"><div className="font-medium text-slate-900 dark:text-white">{user.nom} {user.prenom}</div></td>
                         <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{user.cuid}</td>
                         <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-xs font-medium ${user.statut && user.statut.toLowerCase().includes('actif') ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-700/30 text-slate-800 dark:text-slate-300'}`}>{user.statut}</span></td>
+                        <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{user.mail_huawei}</td>
                         <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{user.domaine}</td>
                         <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{user.cluster}</td>
                         <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{user.affiliate}</td>

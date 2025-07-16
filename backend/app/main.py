@@ -835,7 +835,7 @@ Règles :
             raise ValueError("No valid JSON object found in the AI response.")
         
         json_string = json_string[json_start_index:json_end_index]
-        analysis_result_data = json.loads(json_string)
+        analysis_result_data = json.loads(json_string, strict=False)
         # Validate with the new Pydantic model
         analysis_result = AnalysisResult(**analysis_result_data)
     except (KeyError, IndexError, json.JSONDecodeError, ValueError) as e:
