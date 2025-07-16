@@ -34,6 +34,12 @@ class Analysis(Base):
     file_columns = Column(JSON)
     file_rows = Column(Integer)
 
+    # Analysis metadata
+    analysis_metadata = Column(JSON, nullable=True)
+
+    # Analysis result
+    analysis_result = Column(JSON)
+
     
 
 class FileData(Base):

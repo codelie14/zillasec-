@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, inspect, case
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Dict, Any, Optional
 from fastapi.responses import StreamingResponse
 from datetime import timedelta
@@ -391,7 +391,7 @@ class AnalyticsDataResponse(BaseModel):
     affiliates_list: List[str]
 #</editor-fold>
 
-#<editor-fold desc="Existing API Models">
+#<editor-fold desc="Chat Models">
 class ChatRequest(BaseModel):
     question: str
     context: str
@@ -409,8 +409,10 @@ class Conversation(BaseModel):
     created_at: datetime.datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+#</editor-fold>
 
+#<editor-fold desc="Analysis Models - NEW">
 class Metadata(BaseModel):
     fichier: str
     date_analyse: str
@@ -443,13 +445,17 @@ class Alertes(BaseModel):
 class DetailCompte(BaseModel):
     nom: str
     prenom: str
-    id_huawei: str
+    id_huawei: Any
     cuid: str
     statut: str
     present_en_bd: bool
-    statut_bd: str | None
+    statut_bd: Optional[str] = None
 
-class CustomAnalysisResult(BaseModel):
+    @field_validator('id_huawei', mode='before')
+    def stringify_id_huawei(cls, v):
+        return str(v)
+
+class AnalysisResult(BaseModel):
     metadata: Metadata
     statistiques: Statistiques
     verification_bd: VerificationBD
@@ -466,7 +472,7 @@ class FileDetails(BaseModel):
 class AnalysisResponse(BaseModel):
     id: int
     fichier_details: FileDetails
-    resultat_analyse: CustomAnalysisResult
+    resultat_analyse: AnalysisResult
     
     class Config:
         from_attributes = True
@@ -708,10 +714,14 @@ def analyze_data_with_openrouter(data_json: str, api_key: str, instruction: str)
                     {"role": "system", "content": instruction},
                     {"role": "user", "content": data_json}
                 ]
-            }
+            },
+            timeout=30
         )
         response.raise_for_status()
         return response.json()
+    except requests.exceptions.Timeout:
+        backend_logger.error("Request to OpenRouter API timed out.", exc_info=True)
+        raise HTTPException(status_code=408, detail="Request to AI service timed out.")
     except requests.exceptions.RequestException as e:
         backend_logger.error(f"Error calling OpenRouter API: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error calling OpenRouter API: {e}")
@@ -719,21 +729,26 @@ def analyze_data_with_openrouter(data_json: str, api_key: str, instruction: str)
 @app.post("/analyze/", response_model=AnalysisResponse)
 async def analyze_file(
     file: UploadFile = File(...),
-    instruction: str = Form("Analyze data: identify anomalies, risks, and improvements. Respond in valid, RFC 8259 compliant JSON ONLY. Do NOT include comments or any other text outside the JSON structure. The JSON should be: {\"synthese\": \"\", \"anomalies\": [], \"risques\": [], \"recommandations\": [], \"metriques\": {\"score_risque\": 0.0, \"confiance_analyse\": 0.0}}."),
+    instruction: str = Form(...),
+    metadata: str = Form(...), # Expect a JSON string
     app_settings: Settings = Depends(get_settings),
     db: Session = Depends(get_db)
 ):
     backend_logger.info(f"Starting file analysis for {file.filename}")
+    
+    # Parse metadata
+    try:
+        analysis_metadata = json.loads(metadata)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid metadata format. Expected a JSON string.")
+
     file_extension = file.filename.split('.')[-1].lower()
     if file_extension not in ['xlsx', 'xls', 'csv']:
         backend_logger.warning(f"Invalid file type uploaded: {file_extension}")
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload an Excel or CSV file.")
 
     try:
-        if file_extension == 'csv':
-            df = pd.read_csv(file.file)
-        else:
-            df = pd.read_excel(file.file)
+        df = pd.read_csv(file.file) if file_extension == 'csv' else pd.read_excel(file.file)
     except Exception as e:
         backend_logger.error(f"Error reading uploaded file {file.filename}: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Error reading file: {e}")
@@ -746,48 +761,86 @@ async def analyze_file(
         lignes=len(df)
     )
 
-    # Limit the DataFrame rows sent to the AI if it exceeds the maximum allowed
     df_to_analyze = df.head(app_settings.MAX_AI_INPUT_ROWS)
     data_json = df_to_analyze.to_json(orient='records')
 
     if len(df) > app_settings.MAX_AI_INPUT_ROWS:
-        backend_logger.warning(f"File {file.filename} truncated. Only the first {app_settings.MAX_AI_INPUT_ROWS} rows were sent to the AI for analysis.")
+        backend_logger.warning(f"File {file.filename} truncated. Only the first {app_settings.MAX_AI_INPUT_ROWS} rows were sent for analysis.")
 
+    # Use the new prompt structure from GEMINI.md
+    system_prompt = """Lorsqu'un fichier CSV ou XLSX est uploadé, analyse-le selon ce schéma JSON strict :
+
+{
+  "metadata": {
+    "fichier": "string",
+    "date_analyse": "date",
+    "lignes_analysees": "integer"
+  },
+  "statistiques": {
+    "total_comptes": "integer",
+    "comptes_actifs": "integer",
+    "comptes_desactives": "integer",
+    "comptes_admin": "integer",
+    "comptes_filiale": "integer",
+    "comptes_support": "integer"
+  },
+  "verification_bd": {
+    "comptes_presents": "integer",
+    "comptes_absents": "integer",
+    "incoherences_statut": [
+      {
+        "nom": "string",
+        "prenom": "string",
+        "statut_fichier": "string",
+        "statut_bd": "string"
+      }
+    ]
+  },
+  "alertes": {
+    "admin_desactives": "integer",
+    "acces_sensibles_desactives": "integer",
+    "doublons_cuid": ["string"]
+  },
+  "details_comptes": [
+    {
+      "nom": "string",
+      "prenom": "string",
+      "id_huawei": "string",
+      "cuid": "string",
+      "statut": "string",
+      "present_en_bd": "boolean",
+      "statut_bd": "string|null"
+    }
+  ]
+}
+
+Règles :
+1. Un compte est 'admin' si son domaine contient 'Admin', 'Security' ou '5G'
+2. Un compte est 'support' si son domaine contient 'Support' ou 'DevOps'
+3. Un compte est 'filiale' s'il n'est pas 'dans la base de données'
+4. Vérifie toujours la cohérence CUID/ID Huawei
+5. Formatte les dates en ISO 8601
+"""
+
+    ai_response_raw = analyze_data_with_openrouter(data_json, app_settings.OPENROUTER_API_KEY, system_prompt)
     
-    ai_response_raw = analyze_data_with_openrouter(data_json, app_settings.OPENROUTER_API_KEY, instruction)
-    
-    analysis_content = "" # Initialize analysis_content
+    analysis_content = ""
     try:
-        if 'choices' not in ai_response_raw or not ai_response_raw['choices']:
-            backend_logger.error(f"AI response missing 'choices' key or is empty: {ai_response_raw}")
-            raise ValueError("AI response missing expected 'choices' data.")
-
         analysis_content = ai_response_raw['choices'][0]['message']['content']
+        json_string = analysis_content.strip().removeprefix("```json").removesuffix("```").strip()
         
-        # Clean the AI response to extract only the JSON part.
-        # It handles responses wrapped in ```json ... ```.
-        json_string = analysis_content.strip()
-        if json_string.startswith("```json"):
-            json_string = json_string[7:] # Remove ```json
-        if json_string.endswith("```"):
-            json_string = json_string[:-3] # Remove ```
-        json_string = json_string.strip()
-
-        # Find the start and end of the JSON object
         json_start_index = json_string.find('{')
         json_end_index = json_string.rfind('}') + 1
-
         if json_start_index == -1 or json_end_index == 0:
-            raise ValueError("No valid JSON object found in the AI response after cleaning.")
-
-        json_string = json_string[json_start_index:json_end_index]
+            raise ValueError("No valid JSON object found in the AI response.")
         
+        json_string = json_string[json_start_index:json_end_index]
         analysis_result_data = json.loads(json_string)
         # Validate with the new Pydantic model
-        analysis_result = CustomAnalysisResult(**analysis_result_data)
+        analysis_result = AnalysisResult(**analysis_result_data)
     except (KeyError, IndexError, json.JSONDecodeError, ValueError) as e:
-        backend_logger.error(f"Could not parse or validate AI response: {e} - Raw content was: {analysis_content}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Could not parse or validate AI response: {e} - Raw content was: {analysis_content}")
+        backend_logger.error(f"Could not parse or validate AI response: {e} - Raw content: {analysis_content}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Could not parse or validate AI response. Raw content: {analysis_content}")
 
     # Save to DB
     db_analysis = models.Analysis(
@@ -797,13 +850,14 @@ async def analyze_file(
         file_columns=file_details.colonnes,
         file_rows=file_details.lignes,
         analysis_result=analysis_result.dict(),
+        analysis_metadata=analysis_metadata  # Save the new metadata
     )
     db.add(db_analysis)
     db.commit()
     db.refresh(db_analysis)
     backend_logger.info(f"Saved analysis for {file.filename} with ID {db_analysis.id}")
 
-    # Save file data to the new table
+    # Save file data to the new table, including metadata
     try:
         for index, row in df.iterrows():
             file_data = models.FileData(
@@ -814,8 +868,9 @@ async def analyze_file(
                 mail_huawei=row.get("Mail Huawei"),
                 mail_orange=row.get("Mail Orange"),
                 numero_telephone=row.get("Numero de Telephone"),
-                domaine=row.get("Domaine"),
-                cluster=row.get("Cluster"),
+                domaine=analysis_metadata.get("domaine"), # From metadata
+                cluster=analysis_metadata.get("cluster"), # From metadata
+                affiliate=analysis_metadata.get("affiliate"), # From metadata
                 statut=row.get("Statut"),
                 analysis_id=db_analysis.id,
             )

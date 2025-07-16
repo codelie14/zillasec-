@@ -19,8 +19,8 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcEleme
 // --- NEW HIERARCHICAL MOCK DATA from GEMINI.md ---
 const filterHierarchy = {
   clusters: [
-    { id: "ABJ", name: "ABIDJAN(ABJ)", affiliates: ["OCI", "OCD", "OCM", "OGN", "OSL", "OLB"], domaines: ["IN", "TRANS", "RAN", "IP", "VAS", "PS", "CLOUD", "DIGITAL"] },
-    { id: "DKR", name: "DAKAR(DKR)", affiliates: ["OCF", "OGB", "OBW", "OSN", "OML", "OMG"], domaines: ["IN", "TRANS", "RAN", "IP", "VAS", "PS", "CLOUD", "DIGITAL"] }
+    { id: "ABJ", name: "ABIDJAN(ABJ)", affiliates: ["OCI", "OCD", "OCM", "OGN", "OSL", "OLB"], domaines: ["IN", "TRANS", "RAN", "IP", "VAS", "PS", "CLOUD", "CS", "DIGITAL"] },
+    { id: "DKR", name: "DAKAR(DKR)", affiliates: ["OCF", "OGB", "OBW", "OSN", "OML", "OMG"], domaines: ["IN", "TRANS", "RAN", "IP", "VAS", "PS", "CLOUD", "CS", "DIGITAL"] }
   ]
 };
 
@@ -31,6 +31,7 @@ const plateformes_par_domaine = {
     "IP": ["AMS", "NCE", "CACTI"],
     "VAS": ["OMA USSD Cellcube", "System USSD (Acces root)", "MMG (Smsc Gateway)", "VMS", "I2000 (Smsc)"],
     "PS": ["U2020", "USN", "DNS WEB", "Firewall SRX", "Bluecat", "PGW"],
+    "CS": ["MAE/U2020", "MSC/VLR", "MGW", "SPS", "SBC", "PSX", "EMS", "Ribbon Protect", "iGWB", "SiWF", "PGW HSS", "PGWPSP", "U2020", "Oracle SBC", "NETNUMEN/SDM", "MSC", "MGW", "SPS: USC", "IMS", "IDIH", "SDM (HSS)", "E5MS", "PTS Oracle"],
     "CLOUD": ["OpenStack", "Esight", "Fusion Sphere"],
     "DIGITAL": ["ENM", "OSS-RC"]
 };

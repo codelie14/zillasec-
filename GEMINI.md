@@ -1,135 +1,52 @@
-Cluster = ["ABIDJAN(ABJ)", "DAKAR(DKR)"]
+"Lorsqu'un fichier CSV ou XLSX est uploadé, analyse-le selon ce schéma JSON strict :
 
-affiliates (ABJ) = ["OCI", "OCD", "OCM", "OGN", "OSL", "OLB"]
-
-affiliates (DKR) = ["OCF", "OGB", "OBW", "OSN", "OML", "OMG"]
-
-Domaines = ["IN", "VAS", "PS", "IP", "TRANS", "RAN", "CLOUD", " DIGITAL"]
-
-    
-### **Architecture des Plateformes par Domaine**  
-*(Basé sur PLATEFORME_DOMAINES.xlsx)*  
-
-```python
-plateformes_par_domaine = {
-
-    "IN": [
-        "ZSMART", "ZMC", "STATTOOL", 
-        "DC OSG ElasticNET (supervision)",
-        "WT CEPH(admin)", "PCRF",
-        "COMPTE SUDO SERVEUR DE REBOND"
-    ],
-    "TRANS": [
-        "NMS 1353", "NMS 1354", "NFM-P",
-        "NCE-TX&IP", "3SR", "netnumen",
-        "NFMT / Liquid", "NCE MW"
-    ],
-    "RAN": [
-        "NETACT", "U2020 RAN", "PRS",
-        "ORION", "ELASTICNET"
-    ],
-    "IP": [
-        "AMS", "NCE", "CACTI"
-    ],
-    "VAS": [
-        "OMA USSD Cellcube", "System USSD (Acces root)",
-        "MMG (Smsc Gateway)", "VMS", "I2000 (Smsc)"
-    ],
-    "PS": [
-        "U2020", "USN", "DNS WEB",
-        "Firewall SRX", "Bluecat", "PGW"
-    ],
-    "CLOUD": [
-        "OpenStack", "Esight", "Fusion Sphere"
-    ],
-    "DIGITAL": [
-        "ENM", "OSS-RC"
+{
+  "metadata": {
+    "fichier": string,
+    "date_analyse": date,
+    "lignes_analysees": integer
+  },
+  "statistiques": {
+    "total_comptes": integer,
+    "comptes_actifs": integer,
+    "comptes_desactives": integer,
+    "comptes_admin": integer,
+    "comptes_filiale": integer,
+    "comptes_support": integer
+  },
+  "verification_bd": {
+    "comptes_presents": integer,
+    "comptes_absents": integer,
+    "incoherences_statut": [
+      {
+        "nom": string,
+        "prenom": string,
+        "statut_fichier": string,
+        "statut_bd": string
+      }
     ]
-}
-```
-
----
-
-### **Mapping Complet des Filtres**  
-```javascript
-// Configuration des filtres hiérarchiques
-const filterHierarchy = {
-  clusters: [
-    { 
-      id: "ABJ", 
-      name: "ABIDJAN(ABJ)",
-      affiliates: ["OCI", "OCD", "OCM", "OGN", "OSL", "OLB"],
-      domaines: ["IN", "TRANS", "RAN", "IP", "VAS", "PS", "CLOUD", "DIGITAL"]
-    },
+  },
+  "alertes": {
+    "admin_desactives": integer,
+    "acces_sensibles_desactives": integer,
+    "doublons_cuid": [string]
+  },
+  "details_comptes": [
     {
-      id: "DKR",
-      name: "DAKAR(DKR)", 
-      affiliates: ["OCF", "OGB", "OBW", "OSN", "OML", "OMG"],
-      domaines: ["IN", "TRANS", "RAN", "IP", "VAS", "PS", "CLOUD", "DIGITAL"]
+      "nom": string,
+      "prenom": string,
+      "id_huawei": string,
+      "cuid": string,
+      "statut": string,
+      "present_en_bd": boolean,
+      "statut_bd": string|null
     }
   ]
 }
-```
 
----
-
-### **Workflow d'Intégration**  
-1. **Chargement initial** :  
-   ```sql
-   SELECT DISTINCT domaine FROM plateformes 
-   WHERE cluster = ? ORDER BY domaine;
-   ```
-
-2. **Filtrage dynamique** :  
-   ```javascript
-   // Exemple React
-   const [plateformes, setPlateformes] = useState([]);
-   
-   useEffect(() => {
-     if (domaine) {
-       setPlateformes(plateformes_par_domaine[domaine] || []);
-     }
-   }, [domaine]);
-   ```
-
-3. **Validation backend** :  
-   ```python
-   # API endpoint
-   @app.get("/api/plateformes")
-   def get_plateformes(domaine: str):
-       return plateformes_par_domaine.get(domaine, [])
-   ```
-
----
-
-### **Bonnes Pratiques**  
-1. **Normalisation** :  
-   - Uniformiser les noms (ex: `"ELASTICNET"` → `"ElasticNet"`)  
-   - Supprimer les doublons (ex: `PRS` présent 2x dans `RAN`)  
-
-2. **Documentation** :  
-   ```markdown
-   | Domaine | Plateformes Critiques          |
-   |---------|-------------------------------|
-   | IN      | ZSMART, WT CEPH(admin)        |
-   | TRANS   | NFM-P, NCE-TX&IP              |
-   ```
-
-3. **Sécurité** :  
-   - Taguer les accès admin (`"(admin)"` dans le nom → `is_admin: true`)  
-
----
-
-### **Exemple de Sortie UI**  
-```json
-{
-  "selectedCluster": "ABJ",
-  "selectedAffiliate": "OCI",
-  "selectedDomaine": "IN",
-  "availablePlateformes": [
-    "ZSMART", 
-    "ZMC",
-    "STATTOOL"
-  ]
-}
-```
+Règles :
+1. Un compte est 'admin' si son domaine contient 'Admin', 'Security' ou '5G'
+2. Un compte est 'support' si son domaine contient 'Support' ou 'DevOps'
+3. Un compte est 'filiale' s'il n'est pas 'dans la base de données'
+4. Vérifie toujours la cohérence CUID/ID Huawei
+5. Formatte les dates en ISO 8601
