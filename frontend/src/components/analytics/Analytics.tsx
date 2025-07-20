@@ -31,9 +31,9 @@ const plateformes_par_domaine = {
     "IP": ["AMS", "NCE", "CACTI"],
     "VAS": ["OMA USSD Cellcube", "System USSD (Acces root)", "MMG (Smsc Gateway)", "VMS", "I2000 (Smsc)"],
     "PS": ["U2020", "USN", "DNS WEB", "Firewall SRX", "Bluecat", "PGW"],
-    "CS": ["MAE/U2020", "MSC/VLR", "MGW", "SPS", "SBC", "PSX", "EMS", "Ribbon Protect", "iGWB", "SiWF", "PGW HSS", "PGWPSP", "U2020", "Oracle SBC", "NETNUMEN/SDM", "MSC", "MGW", "SPS: USC", "IMS", "IDIH", "SDM (HSS)", "E5MS", "PTS Oracle"],
+    "CS": ["MAE/U2020", "MSC/VLR", "MGW", "SPS", "SBC", "PSX", "EMS", "Ribbon Protect", "iGWB", "HLR", "SiWF", "PGW HSS", "PGWPSP", "U2020", "Oracle SBC", "NETNUMEN/SDM", "MSC", "MGW", "SPS: USC", "IMS", "IDIH", "SDM (HSS)", "E5MS", "PTS Oracle"],
     "CLOUD": ["OpenStack", "Esight", "Fusion Sphere"],
-    "DIGITAL": ["ENM", "OSS-RC"]
+    "DIGITAL": ["ENM", "OSS-RC", "SECO", "Fusion", "Autin", "AD", "Routers", "Switch", "Firewall", "Gateway", "Porte 1 BO", "Porte 2 FO", "Porte 3 BO"]
 };
 
 const generateMockData = () => {
